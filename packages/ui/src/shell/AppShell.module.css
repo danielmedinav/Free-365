@@ -1,0 +1,126 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--fs-bg);
+}
+
+.skipLink {
+  position: absolute;
+  left: var(--fs-space-2);
+  top: -40px;
+  padding: var(--fs-space-2) var(--fs-space-3);
+  background: var(--fs-surface);
+  border-radius: var(--fs-radius-sm);
+  z-index: 200;
+}
+
+.skipLink:focus {
+  top: var(--fs-space-2);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: var(--fs-space-3);
+  height: var(--fs-topbar-height);
+  padding: 0 var(--fs-space-3);
+  background: var(--fs-surface);
+  border-bottom: 1px solid var(--fs-border);
+  border-top: 3px solid var(--fs-app-accent);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fs-space-2);
+  border: 0;
+  background: none;
+  font-weight: 700;
+  font-size: 15px;
+  padding: var(--fs-space-1) var(--fs-space-2);
+  border-radius: var(--fs-radius-sm);
+  cursor: pointer;
+}
+
+.brand:disabled {
+  cursor: default;
+}
+
+.brand:hover:not(:disabled) {
+  background: var(--fs-surface-hover);
+}
+
+.appName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fs-space-2);
+  color: var(--fs-text-muted);
+  font-weight: 600;
+}
+
+.appIcon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-app-accent);
+  color: var(--fs-text-on-accent);
+}
+
+.title {
+  border: 1px solid transparent;
+  border-radius: var(--fs-radius-sm);
+  background: none;
+  padding: var(--fs-space-1) var(--fs-space-2);
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.title:hover {
+  border-color: var(--fs-border);
+}
+
+.title:focus {
+  border-color: var(--fs-focus);
+  background: var(--fs-surface);
+  outline: none;
+}
+
+.titleText {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.content:focus {
+  outline: none;
+}
+
+.statusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: var(--fs-statusbar-height);
+  padding: 0 var(--fs-space-3);
+  font-size: 12px;
+  color: var(--fs-text-muted);
+  background: var(--fs-surface);
+  border-top: 1px solid var(--fs-border);
+}
+
+.statusGroup {
+  display: flex;
+  gap: var(--fs-space-4);
+}

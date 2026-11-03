@@ -1,0 +1,72 @@
+/* Design tokens. Components use only var(--fs-*) values, never raw colors. */
+:root {
+  --fs-font: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --fs-font-mono: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --fs-radius-sm: 4px;
+  --fs-radius: 8px;
+  --fs-radius-lg: 12px;
+  --fs-space-1: 4px;
+  --fs-space-2: 8px;
+  --fs-space-3: 12px;
+  --fs-space-4: 16px;
+  --fs-space-6: 24px;
+  --fs-topbar-height: 48px;
+  --fs-statusbar-height: 26px;
+
+  --fs-write: #4f5bd5;
+  --fs-grid: #0f8f7a;
+  --fs-deck: #e0573f;
+  --fs-app-accent: #5b6b82;
+}
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --fs-bg: #f3f4f7;
+  --fs-surface: #ffffff;
+  --fs-surface-2: #f7f8fa;
+  --fs-surface-hover: #eceef2;
+  --fs-surface-active: #e1e4ea;
+  --fs-border: #dcdfe5;
+  --fs-border-strong: #c3c8d1;
+  --fs-text: #1d2330;
+  --fs-text-muted: #5f6878;
+  --fs-text-on-accent: #ffffff;
+  --fs-focus: #2563eb;
+  --fs-danger: #c62f2f;
+  --fs-overlay: rgb(15 20 30 / 40%);
+  --fs-shadow: 0 1px 2px rgb(15 20 30 / 8%), 0 4px 16px rgb(15 20 30 / 8%);
+  --fs-shadow-lg: 0 8px 40px rgb(15 20 30 / 18%);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --fs-bg: #14171d;
+  --fs-surface: #1c2028;
+  --fs-surface-2: #222731;
+  --fs-surface-hover: #2a303b;
+  --fs-surface-active: #343b48;
+  --fs-border: #2f3542;
+  --fs-border-strong: #424a5a;
+  --fs-text: #e6e9ef;
+  --fs-text-muted: #9aa3b2;
+  --fs-text-on-accent: #ffffff;
+  --fs-focus: #6b9bff;
+  --fs-danger: #ff6b6b;
+  --fs-overlay: rgb(0 0 0 / 55%);
+  --fs-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 30%);
+  --fs-shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
+  --fs-write: #7c86f0;
+  --fs-grid: #2fb89f;
+  --fs-deck: #f07a63;
+}
+
+[data-app='write'] {
+  --fs-app-accent: var(--fs-write);
+}
+[data-app='grid'] {
+  --fs-app-accent: var(--fs-grid);
+}
+[data-app='deck'] {
+  --fs-app-accent: var(--fs-deck);
+}

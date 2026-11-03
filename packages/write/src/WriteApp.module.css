@@ -1,0 +1,15 @@
+.placeholder {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--fs-space-2);
+  height: 100%;
+  padding: var(--fs-space-6);
+  text-align: center;
+  color: var(--fs-text-muted);
+}
+
+.placeholder h2 {
+  margin: var(--fs-space-3) 0 0;
+  color: var(--fs-text);
+}

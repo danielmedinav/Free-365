@@ -1,0 +1,16 @@
+{
+  "name": "@free360/grid",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@free360/commands": "workspace:*",
+    "@free360/core": "workspace:*",
+    "@free360/ui": "workspace:*",
+    "react": "^19.3.1"
+  }
+}

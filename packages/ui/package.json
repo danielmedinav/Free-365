@@ -1,0 +1,19 @@
+{
+  "name": "@free360/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "exports": {
+    ".": "./src/index.ts",
+    "./global.css": "./src/theme/global.css"
+  },
+  "dependencies": {
+    "@free360/commands": "workspace:*",
+    "@free360/core": "workspace:*",
+    "lucide-react": "^1.66.0",
+    "radix-ui": "^1.8.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}
