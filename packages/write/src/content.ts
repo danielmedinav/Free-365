@@ -2,10 +2,12 @@ import type { DocContent } from '@free360/core';
 import type { JSONContent } from '@tiptap/core';
 
 /**
- * 2: added text style, sub/superscript, line spacing, and indent. Version 1 documents are still
- * valid; the bump stops an older cached copy of the app from opening, and then overwriting, newer ones.
+ * 2: added text style, sub/superscript, line spacing, and indent.
+ * 3: added page setup on the document, and page breaks.
+ * Older documents are still valid; each bump stops an older cached copy of the app from opening,
+ * and then overwriting, newer ones.
  */
-export const WRITE_SCHEMA_VERSION = 2;
+export const WRITE_SCHEMA_VERSION = 3;
 
 /** The stored body of a FreeWrite document: TipTap's JSON document, wrapped so it can grow. */
 export type WriteData = { doc: JSONContent };

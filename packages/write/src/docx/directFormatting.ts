@@ -6,6 +6,8 @@ import JSZip from 'jszip';
  * marker characters, where Mammoth passes them through untouched. Afterwards the markers in its HTML
  * are turned into real inline styles, which the editor understands.
  */
+export const PAGE_BREAK_CLASS = 'fs-page-break';
+
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const DOCUMENT_PATH = 'word/document.xml';
 
@@ -47,6 +49,9 @@ const ALIGNMENTS: Record<string, string> = {
 
 type Styles = Record<string, string>;
 
+/** Not sent to CSS: asks for a page break node in front of the paragraph. */
+const BREAK_BEFORE = 'break-before';
+
 function child(parent: Element | null | undefined, name: string): Element | null {
   if (!parent) return null;
   for (const element of parent.children) {
@@ -84,6 +89,11 @@ function runStyles(properties: Element | null): Styles {
 
 function blockStyles(properties: Element | null): Styles {
   const styles: Styles = {};
+  const breakBefore = child(properties, 'pageBreakBefore');
+  if (breakBefore && attr(breakBefore, 'val') !== '0' && attr(breakBefore, 'val') !== 'false') {
+    styles[BREAK_BEFORE] = 'page';
+  }
+
   const align = ALIGNMENTS[attr(child(properties, 'jc'), 'val') ?? ''];
   if (align) styles['text-align'] = align;
 
@@ -147,7 +157,13 @@ export async function embedDirectFormatting(file: ArrayBuffer): Promise<ArrayBuf
 
 function applyStyles(element: HTMLElement, payload: string): void {
   for (const [name, value] of Object.entries(JSON.parse(payload) as Styles)) {
-    element.style.setProperty(name, value);
+    if (name === BREAK_BEFORE) {
+      const pageBreak = element.ownerDocument.createElement('hr');
+      pageBreak.className = PAGE_BREAK_CLASS;
+      element.before(pageBreak);
+    } else {
+      element.style.setProperty(name, value);
+    }
   }
 }
 
@@ -185,6 +201,13 @@ export function applyDirectFormatting(html: string): string {
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
   for (const node of nodes) {
     if (/[-]/.test(node.data)) applyToTextNode(node, parsed);
+  }
+  // Mammoth writes a page break inside a paragraph, and HTML splits that around it, leaving empty
+  // paragraphs behind that were never in the document.
+  for (const pageBreak of parsed.body.querySelectorAll(`hr.${PAGE_BREAK_CLASS}`)) {
+    for (const neighbor of [pageBreak.previousElementSibling, pageBreak.nextElementSibling]) {
+      if (neighbor?.tagName === 'P' && !neighbor.hasChildNodes()) neighbor.remove();
+    }
   }
   return parsed.body.innerHTML;
 }

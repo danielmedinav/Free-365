@@ -5,13 +5,16 @@ import {
   Document,
   HeadingLevel,
   LineRuleType,
+  PageBreak,
   Packer,
   Paragraph,
   TextRun,
 } from 'docx';
+import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import { writeExtensions } from '../extensions';
 import { primaryFont, toHexColor } from '../formatting';
+import { DEFAULT_PAGE_SETUP, readPageSetup } from '../pageSetup';
 import { exportDocx } from './exportDocx';
 import { readImageSize } from './imageSize';
 import { importDocx } from './importDocx';
@@ -324,6 +327,70 @@ describe('.docx round trip', () => {
     expect(blocks(result)[0]?.content).toBeUndefined();
   });
 
+  it('keeps paper size, orientation, margins, header, footer, and page numbers', async () => {
+    const pageSetup = {
+      widthIn: 11.69,
+      heightIn: 8.27,
+      marginTopIn: 0.5,
+      marginBottomIn: 0.75,
+      marginLeftIn: 1.25,
+      marginRightIn: 2,
+      headerText: 'Annual report',
+      footerText: 'Confidential',
+      pageNumbers: 'footer',
+    };
+    const result = await roundTrip({ ...doc(para(text('x'))), attrs: { pageSetup } });
+    const read = readPageSetup(result.attrs?.pageSetup);
+    expect(read.widthIn).toBeCloseTo(11.69);
+    expect(read.heightIn).toBeCloseTo(8.27);
+    expect(read.marginTopIn).toBeCloseTo(0.5);
+    expect(read.marginBottomIn).toBeCloseTo(0.75);
+    expect(read.marginLeftIn).toBeCloseTo(1.25);
+    expect(read.marginRightIn).toBeCloseTo(2);
+    expect(read.headerText).toBe('Annual report');
+    expect(read.footerText).toBe('Confidential');
+    expect(read.pageNumbers).toBe('footer');
+  });
+
+  it('keeps page numbers in the header, with or without text', async () => {
+    const pageSetup = { pageNumbers: 'header' };
+    const result = await roundTrip({ ...doc(para(text('x'))), attrs: { pageSetup } });
+    const read = readPageSetup(result.attrs?.pageSetup);
+    expect(read.pageNumbers).toBe('header');
+    expect(read.headerText).toBe('');
+  });
+
+  it('uses the defaults when a document has no page setup', async () => {
+    const result = await roundTrip(doc(para(text('x'))));
+    expect(readPageSetup(result.attrs?.pageSetup)).toEqual(DEFAULT_PAGE_SETUP);
+  });
+
+  it('keeps page breaks without adding empty paragraphs', async () => {
+    const result = await roundTrip(
+      doc(para(text('before')), { type: 'pageBreak' }, para(text('after'))),
+    );
+    expect(blocks(result).map((b) => b.type)).toEqual(['paragraph', 'pageBreak', 'paragraph']);
+  });
+
+  it('fits tables and images to the width between the margins', async () => {
+    const pageSetup = { widthIn: 8.5, marginLeftIn: 2, marginRightIn: 2 };
+    const table = {
+      type: 'table',
+      content: [
+        {
+          type: 'tableRow',
+          content: [
+            { type: 'tableCell', attrs: { colspan: 1, rowspan: 1 }, content: [para(text('a'))] },
+          ],
+        },
+      ],
+    };
+    const blob = await exportDocx({ ...doc(table), attrs: { pageSetup } }, 'Test');
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const xml = await zip.file('word/document.xml')!.async('text');
+    expect(xml).toContain('w:w="6480"'); // 4.5 inches
+  });
+
   it('handles an empty document', async () => {
     const result = await roundTrip(doc());
     expect(result.type).toBe('doc');
@@ -442,6 +509,25 @@ describe('importDocx with files from other programs', () => {
     ]);
     expect(blocks(result)[0]?.type).toBe('heading');
     expect(blocks(result)[0]?.attrs?.textAlign).toBe('center');
+  });
+
+  it('turns a paragraph set to start on a new page into a page break', async () => {
+    const result = await fromParagraphs([
+      new Paragraph('one'),
+      new Paragraph({ pageBreakBefore: true, children: [new TextRun('two')] }),
+    ]);
+    expect(blocks(result).map((b) => b.type)).toEqual(['paragraph', 'pageBreak', 'paragraph']);
+  });
+
+  it('keeps text around a page break in the middle of a paragraph', async () => {
+    const result = await fromParagraphs([
+      new Paragraph({ children: [new TextRun('one'), new PageBreak(), new TextRun('two')] }),
+    ]);
+    expect(blocks(result).map((b) => [b.type, b.content?.[0]?.text])).toEqual([
+      ['paragraph', 'one'],
+      ['pageBreak', undefined],
+      ['paragraph', 'two'],
+    ]);
   });
 
   it('keeps a font name with odd characters from breaking the document', async () => {

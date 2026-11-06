@@ -14,7 +14,7 @@ import type { JSONContent } from '@tiptap/core';
 import { Placeholder } from '@tiptap/extensions';
 import { closeHistory } from '@tiptap/pm/history';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createAutosaver, type SaveStatus } from './autosave';
 import { createWriteCommands } from './commands';
 import { WRITE_SCHEMA_VERSION, type WriteData } from './content';
@@ -29,6 +29,10 @@ import {
   imageFileToDataUrl,
   insertImageFiles,
 } from './images';
+import { paginationKey, Pagination } from './paginationPlugin';
+import { PageSetupDialog } from './PageSetupDialog';
+import { PageSheets } from './PageSheets';
+import { PX_PER_INCH, readPageSetup } from './pageSetup';
 import { countWords } from './wordCount';
 import styles from './WriteEditor.module.css';
 import { buildWriteRibbon } from './writeRibbon';
@@ -53,6 +57,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
   const [find, setFind] = useState<{ mode: 'find' | 'replace'; focusKey: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
+  const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ doc: JSONContent; title: string } | null>(
     null,
   );
@@ -63,7 +68,11 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
   };
 
   const editor = useEditor({
-    extensions: [...writeExtensions, Placeholder.configure({ placeholder: 'Start typing…' })],
+    extensions: [
+      ...writeExtensions,
+      Pagination,
+      Placeholder.configure({ placeholder: 'Start typing…' }),
+    ],
     content: initialDoc,
     autofocus: 'end',
     editorProps: {
@@ -138,6 +147,22 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
     },
   });
 
+  const setup = useEditorState({
+    editor,
+    selector: ({ editor: e }) => readPageSetup(e.state.doc.attrs.pageSetup),
+  });
+  const pages = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      const gaps = paginationKey.getState(e.state)?.gaps ?? [];
+      const { from } = e.state.selection;
+      return {
+        count: gaps.length + 1,
+        current: gaps.filter((gap) => (gap.positions[0] ?? 0) <= from).length + 1,
+      };
+    },
+  });
+
   const applyImport = (doc: JSONContent, title: string) => {
     editor
       .chain()
@@ -146,6 +171,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
         return true;
       })
       .setContent(doc)
+      .updatePageSetup(readPageSetup(doc.attrs?.pageSetup))
       .focus('start')
       .run();
     if (meta.title === APPS.write.defaultTitle) shell.onTitleChange?.(title);
@@ -189,6 +215,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
       isFindOpen: () => find !== null,
       save: () => autosaver.flush(),
       editLink: () => setLinkDraft(String(editor.getAttributes('link').href ?? '')),
+      openPageSetup: () => setPageSetupOpen(true),
       async insertImage() {
         const [file] = await pickFiles([IMAGE_FILE_TYPE]);
         if (!file) return;
@@ -235,6 +262,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
         left: (
           <>
             <span>FreeWrite</span>
+            <span>{`Page ${pages.current} of ${pages.count}`}</span>
             <span>{words === 1 ? '1 word' : `${words} words`}</span>
           </>
         ),
@@ -242,9 +270,33 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
       }}
     >
       {find && <FindBar editor={editor} mode={find.mode} focusKey={find.focusKey} />}
+      {/* Each document can have its own paper size, and printing has to use it. */}
+      <style>{`@page { size: ${setup.widthIn}in ${setup.heightIn}in; margin: 0; }`}</style>
       <div className={styles.desk}>
-        <EditorContent editor={editor} className={`${styles.page} fs-paper`} />
+        <div
+          className={`${styles.pages} fs-paper`}
+          style={
+            {
+              '--fs-page-width': `${setup.widthIn * PX_PER_INCH}px`,
+              '--fs-page-height': `${setup.heightIn * PX_PER_INCH}px`,
+              '--fs-margin-top': `${setup.marginTopIn * PX_PER_INCH}px`,
+              '--fs-margin-bottom': `${setup.marginBottomIn * PX_PER_INCH}px`,
+              '--fs-margin-left': `${setup.marginLeftIn * PX_PER_INCH}px`,
+              '--fs-margin-right': `${setup.marginRightIn * PX_PER_INCH}px`,
+              '--fs-page-count': pages.count,
+            } as CSSProperties
+          }
+        >
+          <PageSheets setup={setup} pageCount={pages.count} />
+          <EditorContent editor={editor} className={styles.page} />
+        </div>
       </div>
+      <PageSetupDialog
+        setup={setup}
+        open={pageSetupOpen}
+        onOpenChange={setPageSetupOpen}
+        onSave={(patch) => editor.chain().focus().updatePageSetup(patch).run()}
+      />
       <PromptDialog
         open={linkDraft !== null}
         onOpenChange={(open) => {

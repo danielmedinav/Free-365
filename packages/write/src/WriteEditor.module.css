@@ -1,24 +1,54 @@
 .desk {
+  width: max-content;
+  min-width: 100%;
   padding: var(--fs-space-6);
 }
 
-/* A US Letter sheet with one-inch margins. */
-.page {
-  width: 816px;
-  max-width: 100%;
+/* The stack of sheets. The text sits on top, in one flow, and spacers push it from page to page. */
+.pages {
+  --fs-sheet-gap: 16px;
+  --fs-content-height: calc(var(--fs-page-height) - var(--fs-margin-top) - var(--fs-margin-bottom));
+  position: relative;
+  width: var(--fs-page-width);
+  height: calc(
+    var(--fs-page-count) * (var(--fs-page-height) + var(--fs-sheet-gap)) - var(--fs-sheet-gap)
+  );
   margin: 0 auto;
-  background: var(--fs-page);
   color: var(--fs-page-text);
-  box-shadow: var(--fs-shadow);
+}
+
+.page {
+  position: relative;
+  height: 100%;
 }
 
 .page :global(.tiptap) {
-  min-height: 1056px;
-  padding: 96px;
+  min-height: 100%;
+  padding: var(--fs-margin-top) var(--fs-margin-right) var(--fs-margin-bottom) var(--fs-margin-left);
   font-family: var(--fs-page-font);
   font-size: 11pt;
   line-height: 1.15;
   overflow-wrap: break-word;
+}
+
+.page :global(.fs-page-gap) {
+  display: block;
+  user-select: none;
+}
+
+.page :global(.fs-page-gap-row) {
+  display: table-row;
+}
+
+.page :global(.fs-page-gap-cell) {
+  display: table-cell;
+  padding: 0;
+}
+
+/* Hidden for a moment while page positions are measured. */
+.page:global(.fs-measuring) :global(.fs-page-gap),
+.page:global(.fs-measuring) :global(.fs-page-gap-row) {
+  display: none;
 }
 
 .page :global(.tiptap:focus) {
@@ -80,10 +110,19 @@
   font-family: var(--fs-font-mono);
 }
 
+/* Spacing is inside the element, not margins: margins would collapse differently beside a spacer. */
 .page :global(.tiptap hr) {
-  margin: 1em 0;
+  height: 2em;
+  margin: 0;
   border: 0;
-  border-top: 1px solid var(--fs-border-strong);
+  background: linear-gradient(var(--fs-border-strong), var(--fs-border-strong)) center / 100% 1px
+    no-repeat;
+}
+
+.page :global(.tiptap hr.fs-page-break) {
+  height: 1.5em;
+  background: repeating-linear-gradient(90deg, var(--fs-text-muted) 0 6px, transparent 6px 12px)
+    center / 100% 1px no-repeat;
 }
 
 .page :global(.tiptap hr.ProseMirror-selectednode) {
@@ -93,7 +132,9 @@
 .page :global(.tiptap img) {
   display: block;
   max-width: 100%;
+  max-height: var(--fs-content-height);
   height: auto;
+  object-fit: contain;
 }
 
 .page :global(.tiptap img.ProseMirror-selectednode) {
@@ -159,23 +200,23 @@
   justify-content: flex-end;
 }
 
-@page {
-  margin: 1in;
-}
-
 @media print {
   .desk {
-    padding: 0;
-  }
-
-  .page {
     width: auto;
-    box-shadow: none;
+    min-width: 0;
+    padding: 0;
   }
 
-  .page :global(.tiptap) {
-    min-height: 0;
-    padding: 0;
+  /* Without the gap between sheets, each one lands exactly on a printed page. */
+  .pages {
+    --fs-sheet-gap: 0px;
+    margin: 0;
+    overflow: hidden;
+    print-color-adjust: exact;
+  }
+
+  .page :global(.tiptap hr.fs-page-break) {
+    background: none;
   }
 
   .page :global(.fs-find-match),

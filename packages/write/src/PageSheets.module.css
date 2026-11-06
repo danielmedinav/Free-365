@@ -1,0 +1,36 @@
+.sheet {
+  position: absolute;
+  left: 0;
+  width: var(--fs-page-width);
+  height: var(--fs-page-height);
+  overflow: hidden;
+  background: var(--fs-page);
+  box-shadow: var(--fs-shadow);
+}
+
+.zone {
+  position: absolute;
+  left: var(--fs-margin-left);
+  right: var(--fs-margin-right);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--fs-space-4);
+  font-family: var(--fs-page-font);
+  font-size: 9pt;
+  color: var(--fs-text-muted);
+  white-space: nowrap;
+}
+
+.header {
+  top: calc(var(--fs-margin-top) * 0.4);
+}
+
+.footer {
+  bottom: calc(var(--fs-margin-bottom) * 0.4);
+}
+
+@media print {
+  .sheet {
+    box-shadow: none;
+  }
+}

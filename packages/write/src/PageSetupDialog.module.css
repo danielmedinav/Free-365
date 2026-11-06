@@ -1,0 +1,36 @@
+.margins {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--fs-space-2);
+  margin: 0 0 var(--fs-space-3);
+  padding: 0;
+  border: 0;
+}
+
+.margins legend {
+  padding: 0;
+  margin-bottom: var(--fs-space-1);
+  font-weight: 600;
+}
+
+.field {
+  display: grid;
+  gap: var(--fs-space-1);
+  margin-bottom: var(--fs-space-3);
+}
+
+.field input {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--fs-space-2);
+  border: 1px solid var(--fs-border-strong);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-surface);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--fs-space-2);
+  margin-top: var(--fs-space-4);
+}

@@ -13,6 +13,7 @@
     "@free360/storage": "workspace:*",
     "@free360/ui": "workspace:*",
     "@tiptap/core": "^3.33.0",
+    "@tiptap/extension-hard-break": "^3.33.0",
     "@tiptap/extension-image": "^3.33.0",
     "@tiptap/extension-subscript": "^3.33.0",
     "@tiptap/extension-superscript": "^3.33.0",

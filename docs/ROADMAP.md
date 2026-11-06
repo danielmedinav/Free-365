@@ -23,9 +23,13 @@ page view, undo/redo, autosave, .docx export and import (mammoth), PDF via print
 Also added: fonts, sizes, text and highlight colors, line spacing, indents, links,
 superscript/subscript, and clear formatting.
 
-Known gaps, for later: the page view is one continuous sheet (no on-screen page breaks), and .docx
-import replaces the open document (no import from the home screen). Import reads formatting set
-directly on text and paragraphs, but not formatting inherited from named styles or themes.
+Page layout: real on-screen pages, page breaks, paper size, orientation, margins, one-line headers
+and footers, and page numbers, all kept in .docx export and import and matched when printing.
+
+Known gaps, for later: .docx import replaces the open document (no import from the home screen),
+and reads formatting set directly on text and paragraphs, but not formatting inherited from named
+styles or themes. Headers and footers are one plain line, the same on every page. A table row taller
+than a page runs across the gap, and header rows don't repeat on later pages.
 
 ## Milestone 2: FreeGrid MVP ⬜
 

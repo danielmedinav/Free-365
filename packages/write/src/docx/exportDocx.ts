@@ -4,29 +4,33 @@ import {
   BorderStyle,
   Document,
   ExternalHyperlink,
+  Footer,
+  Header,
   HeadingLevel,
   ImageRun,
   LevelFormat,
+  PageBreak,
+  PageNumber,
+  PageOrientation,
   Packer,
   Paragraph,
   ShadingType,
   Table,
   TableCell,
   TableRow,
+  TabStopType,
   TextRun,
   WidthType,
   type IParagraphOptions,
   type ParagraphChild,
 } from 'docx';
 import { INDENT_STEP_INCHES, primaryFont, toHexColor, toPoints } from '../formatting';
+import { isLandscape, PX_PER_INCH, readPageSetup, type PageSetup } from '../pageSetup';
 import { readImageSize } from './imageSize';
 import { CODE_BLOCK_STYLE, DIVIDER_STYLE, INLINE_CODE_STYLE, QUOTE_STYLE } from './styleNames';
 
 const ORDERED_LIST = 'fs-ordered';
 const MAX_LIST_LEVEL = 8;
-/** Width between one-inch margins on a US Letter page. */
-const TEXT_WIDTH_TWIPS = 9360;
-const TEXT_WIDTH_PIXELS = 624;
 const LIST_INDENT_TWIPS = 360;
 const TWIPS_PER_INCH = 1440;
 const SINGLE_LINE = 240;
@@ -64,6 +68,15 @@ type BlockContext = {
   listLevel: number;
   paragraph: IParagraphOptions;
 };
+
+function twips(inches: number): number {
+  return Math.round(inches * TWIPS_PER_INCH);
+}
+
+/** The width between the left and right margins. */
+function contentWidthInches(setup: PageSetup): number {
+  return setup.widthIn - setup.marginLeftIn - setup.marginRightIn;
+}
 
 function decodeDataUrl(src: string) {
   const match = /^data:([^;,]+);base64,(.*)$/s.exec(src);
@@ -122,7 +135,7 @@ function blockFormat(node: JSONContent, context: BlockContext): IParagraphOption
   };
 }
 
-function imageParagraph(node: JSONContent, context: BlockContext): Paragraph {
+function imageParagraph(node: JSONContent, context: BlockContext, maxWidthPx: number): Paragraph {
   const src = String(node.attrs?.src ?? '');
   const alt = String(node.attrs?.alt ?? '');
   const decoded = decodeDataUrl(src);
@@ -138,7 +151,7 @@ function imageParagraph(node: JSONContent, context: BlockContext): Paragraph {
     return new Paragraph({ ...context.paragraph, children });
   }
 
-  const scale = Math.min(1, TEXT_WIDTH_PIXELS / size.width);
+  const scale = Math.min(1, maxWidthPx / size.width);
   return new Paragraph({
     ...context.paragraph,
     children: [
@@ -155,16 +168,16 @@ function imageParagraph(node: JSONContent, context: BlockContext): Paragraph {
   });
 }
 
-function tableBlock(node: JSONContent, convertBlocks: BlockConverter): Table {
+function tableBlock(node: JSONContent, convertBlocks: BlockConverter, widthTwips: number): Table {
   const rows = node.content ?? [];
   const columnCount = (rows[0]?.content ?? []).reduce(
     (total, cell) => total + Number(cell.attrs?.colspan ?? 1),
     0,
   );
-  const columnWidth = Math.floor(TEXT_WIDTH_TWIPS / Math.max(columnCount, 1));
+  const columnWidth = Math.floor(widthTwips / Math.max(columnCount, 1));
 
   return new Table({
-    width: { size: TEXT_WIDTH_TWIPS, type: WidthType.DXA },
+    width: { size: widthTwips, type: WidthType.DXA },
     columnWidths: Array.from({ length: columnCount }, () => columnWidth),
     rows: rows.map((row) => {
       const cells = row.content ?? [];
@@ -186,7 +199,9 @@ function tableBlock(node: JSONContent, convertBlocks: BlockConverter): Table {
 
 type BlockConverter = (nodes: JSONContent[], context: BlockContext) => Block[];
 
-function createBlockConverter(): BlockConverter {
+function createBlockConverter(setup: PageSetup): BlockConverter {
+  const contentWidth = contentWidthInches(setup);
+
   // Each numbered list gets its own instance, so its numbering restarts at 1.
   let nextListInstance = 0;
 
@@ -248,9 +263,11 @@ function createBlockConverter(): BlockConverter {
         case 'horizontalRule':
           return [new Paragraph({ ...context.paragraph, style: 'Divider' })];
         case 'image':
-          return [imageParagraph(node, context)];
+          return [imageParagraph(node, context, contentWidth * PX_PER_INCH)];
         case 'table':
-          return [tableBlock(node, convert)];
+          return [tableBlock(node, convert, twips(contentWidth))];
+        case 'pageBreak':
+          return [new Paragraph({ children: [new PageBreak()] })];
         default:
           return [];
       }
@@ -275,9 +292,51 @@ function orderedListLevels() {
   }));
 }
 
+/** One line: the text on the left and, if wanted, the page number on the right. */
+function zoneParagraph(setup: PageSetup, text: string, withNumber: boolean): Paragraph | undefined {
+  if (!text && !withNumber) return undefined;
+  return new Paragraph({
+    tabStops: [{ type: TabStopType.RIGHT, position: twips(contentWidthInches(setup)) }],
+    children: [
+      new TextRun({ text, size: 18 }),
+      ...(withNumber ? [new TextRun({ children: ['\t', PageNumber.CURRENT], size: 18 })] : []),
+    ],
+  });
+}
+
+function sectionOptions(setup: PageSetup) {
+  const header = zoneParagraph(setup, setup.headerText, setup.pageNumbers === 'header');
+  const footer = zoneParagraph(setup, setup.footerText, setup.pageNumbers === 'footer');
+  const landscape = isLandscape(setup);
+  return {
+    properties: {
+      page: {
+        // Given as portrait: the library swaps them for landscape.
+        size: {
+          width: twips(Math.min(setup.widthIn, setup.heightIn)),
+          height: twips(Math.max(setup.widthIn, setup.heightIn)),
+          orientation: landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
+        },
+        margin: {
+          top: twips(setup.marginTopIn),
+          bottom: twips(setup.marginBottomIn),
+          left: twips(setup.marginLeftIn),
+          right: twips(setup.marginRightIn),
+          // Matches where the sheets show them on screen.
+          header: twips(setup.marginTopIn * 0.4),
+          footer: twips(setup.marginBottomIn * 0.4),
+        },
+      },
+    },
+    ...(header ? { headers: { default: new Header({ children: [header] }) } } : {}),
+    ...(footer ? { footers: { default: new Footer({ children: [footer] }) } } : {}),
+  };
+}
+
 /** Converts a FreeWrite document to a .docx file. */
 export async function exportDocx(doc: JSONContent, title?: string): Promise<Blob> {
-  const convert = createBlockConverter();
+  const setup = readPageSetup(doc.attrs?.pageSetup);
+  const convert = createBlockConverter(setup);
   const children = convert(doc.content ?? [], { listLevel: -1, paragraph: {} });
 
   const file = new Document({
@@ -323,7 +382,9 @@ export async function exportDocx(doc: JSONContent, title?: string): Promise<Blob
         { id: 'InlineCode', name: INLINE_CODE_STYLE, run: { font: 'Courier New' } },
       ],
     },
-    sections: [{ children: children.length ? children : [new Paragraph({})] }],
+    sections: [
+      { ...sectionOptions(setup), children: children.length ? children : [new Paragraph({})] },
+    ],
   });
 
   return Packer.toBlob(file);

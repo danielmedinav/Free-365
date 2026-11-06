@@ -15,6 +15,7 @@ import {
   Heading2,
   Heading3,
   Highlighter,
+  FileSliders,
   ImagePlus,
   IndentDecrease,
   IndentIncrease,
@@ -25,6 +26,7 @@ import {
   ListOrdered,
   Minus,
   Pilcrow,
+  SeparatorHorizontal,
   Printer,
   Redo2,
   RemoveFormatting,
@@ -48,6 +50,7 @@ import {
   TEXT_COLORS,
   toPoints,
 } from './formatting';
+import { MARGIN_PRESETS, PAGE_SIZES } from './pageSetup';
 
 const TRANSFER_GROUP: RibbonGroup = {
   id: 'transfer',
@@ -253,10 +256,96 @@ const INSERT_TAB: RibbonTab = {
   ],
 };
 
+const LAYOUT_TAB: RibbonTab = {
+  id: 'layout',
+  label: 'Layout',
+  groups: [
+    {
+      id: 'page',
+      label: 'Page',
+      width: 346,
+      items: [
+        {
+          type: 'custom',
+          id: 'page-size',
+          render: () => (
+            <CommandSelect
+              label="Paper size"
+              width={170}
+              currentLabel={() => 'Custom size'}
+              options={PAGE_SIZES.map((size) => ({
+                command: `write.pageSize-${size.id}`,
+                label: size.label,
+              }))}
+            />
+          ),
+        },
+        {
+          type: 'custom',
+          id: 'orientation',
+          render: () => (
+            <CommandSelect
+              label="Orientation"
+              width={170}
+              options={[
+                { command: 'write.orientation-portrait', label: 'Portrait' },
+                { command: 'write.orientation-landscape', label: 'Landscape' },
+              ]}
+            />
+          ),
+        },
+        {
+          type: 'custom',
+          id: 'margins',
+          render: () => (
+            <CommandSelect
+              label="Margins"
+              width={170}
+              currentLabel={() => 'Custom margins'}
+              options={MARGIN_PRESETS.map((margins) => ({
+                command: `write.margins-${margins.id}`,
+                label: `${margins.label} margins`,
+              }))}
+            />
+          ),
+        },
+        {
+          type: 'custom',
+          id: 'page-numbers',
+          render: () => (
+            <CommandSelect
+              label="Page numbers"
+              width={170}
+              options={[
+                { command: 'write.pageNumbers-none', label: 'No page numbers' },
+                { command: 'write.pageNumbers-footer', label: 'Numbers in footer' },
+                { command: 'write.pageNumbers-header', label: 'Numbers in header' },
+              ]}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      id: 'breaks',
+      label: 'Breaks',
+      items: [
+        { type: 'command', command: 'write.pageBreak', icon: SeparatorHorizontal, size: 'large' },
+      ],
+    },
+    {
+      id: 'setup',
+      label: 'Setup',
+      items: [{ type: 'command', command: 'write.pageSetup', icon: FileSliders, size: 'large' }],
+    },
+  ],
+};
+
 export function buildWriteRibbon(fileTab: RibbonTab, editor: Editor): RibbonTab[] {
   return [
     { ...fileTab, groups: [...fileTab.groups, TRANSFER_GROUP] },
     buildHomeTab(editor),
     INSERT_TAB,
+    LAYOUT_TAB,
   ];
 }

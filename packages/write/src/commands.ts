@@ -11,6 +11,16 @@ import {
   TEXT_COLORS,
   toHexColor,
 } from './formatting';
+import {
+  isLandscape,
+  MARGIN_PRESETS,
+  matchesMargins,
+  matchesPageSize,
+  PAGE_SIZES,
+  readPageSetup,
+  withOrientation,
+  withPageSize,
+} from './pageSetup';
 import { createEditorUndoStack } from './undoStack';
 
 export type WriteActions = {
@@ -20,6 +30,7 @@ export type WriteActions = {
   save: () => void | Promise<unknown>;
   insertImage: () => void | Promise<unknown>;
   editLink: () => void;
+  openPageSetup: () => void;
   importDocx: () => void | Promise<unknown>;
   exportDocx: () => void | Promise<unknown>;
   print: () => void;
@@ -241,6 +252,8 @@ export function createWriteCommands(editor: Editor, actions: WriteActions): Comm
       isEnabled: () => editor.isActive('link'),
     },
 
+    ...createPageCommands(editor, run, can, actions),
+
     {
       id: 'write.insertTable',
       label: 'Table',
@@ -420,5 +433,62 @@ function createTextStyleCommands(editor: Editor, run: ChainStep, can: ChainCheck
       isEnabled: canStyle,
       isActive: () => toHexColor(style('backgroundColor')) === hex,
     })),
+  ];
+}
+
+function createPageCommands(
+  editor: Editor,
+  run: ChainStep,
+  can: ChainCheck,
+  actions: WriteActions,
+): Command[] {
+  const setup = () => readPageSetup(editor.state.doc.attrs.pageSetup);
+
+  return [
+    ...PAGE_SIZES.map((size): Command => ({
+      id: `write.pageSize-${size.id}`,
+      label: size.label,
+      run: run((c) => c.updatePageSetup(withPageSize(setup(), size))),
+      isActive: () => matchesPageSize(setup(), size),
+    })),
+    ...[false, true].map((landscape): Command => ({
+      id: `write.orientation-${landscape ? 'landscape' : 'portrait'}`,
+      label: landscape ? 'Landscape' : 'Portrait',
+      run: run((c) => c.updatePageSetup(withOrientation(setup(), landscape))),
+      isActive: () => isLandscape(setup()) === landscape,
+    })),
+    ...MARGIN_PRESETS.map((margins): Command => ({
+      id: `write.margins-${margins.id}`,
+      label: margins.label,
+      run: run((c) =>
+        c.updatePageSetup({
+          marginTopIn: margins.top,
+          marginBottomIn: margins.bottom,
+          marginLeftIn: margins.left,
+          marginRightIn: margins.right,
+        }),
+      ),
+      isActive: () => matchesMargins(setup(), margins),
+    })),
+    ...(['none', 'footer', 'header'] as const).map((placement): Command => ({
+      id: `write.pageNumbers-${placement}`,
+      label: { none: 'None', footer: 'In footer', header: 'In header' }[placement],
+      run: run((c) => c.updatePageSetup({ pageNumbers: placement })),
+      isActive: () => setup().pageNumbers === placement,
+    })),
+    {
+      id: 'write.pageBreak',
+      label: 'Page break',
+      description: 'Start the next page here',
+      shortcut: 'Mod+Enter',
+      run: run((c) => c.setPageBreak()),
+      isEnabled: can((c) => c.setPageBreak()),
+    },
+    {
+      id: 'write.pageSetup',
+      label: 'Margins, header, and footer',
+      description: 'Set exact margins and the text at the top and bottom of every page',
+      run: actions.openPageSetup,
+    },
   ];
 }

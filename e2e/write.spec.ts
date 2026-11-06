@@ -311,7 +311,7 @@ test('colors survive .docx export and import in the browser', async ({ page }) =
 test('the page stays white in the dark theme, so colors stay readable', async ({ page }) => {
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.locator('.fs-paper')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('.fs-sheet')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 });
 
 test('find and replace', async ({ page }) => {

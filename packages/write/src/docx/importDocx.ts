@@ -1,11 +1,13 @@
 import { generateJSON, type JSONContent } from '@tiptap/core';
 import mammoth from 'mammoth';
 import { writeExtensions } from '../extensions';
-import { applyDirectFormatting, embedDirectFormatting } from './directFormatting';
+import { applyDirectFormatting, embedDirectFormatting, PAGE_BREAK_CLASS } from './directFormatting';
+import { readDocxPageSetup } from './pageSetupImport';
 import { CODE_BLOCK_STYLE, DIVIDER_STYLE, INLINE_CODE_STYLE, QUOTE_STYLE } from './styleNames';
 
 const STYLE_MAP = [
   'u => u',
+  `br[type='page'] => hr.${PAGE_BREAK_CLASS}`,
   `p[style-name='${QUOTE_STYLE}'] => blockquote > p:fresh`,
   `p[style-name='${CODE_BLOCK_STYLE}'] => pre:separator('\\n')`,
   `p[style-name='${DIVIDER_STYLE}'] => hr:fresh`,
@@ -21,5 +23,6 @@ export async function importDocx(file: ArrayBuffer): Promise<JSONContent> {
     styleMap: STYLE_MAP,
     ignoreEmptyParagraphs: false,
   });
-  return generateJSON(applyDirectFormatting(value), writeExtensions);
+  const doc = generateJSON(applyDirectFormatting(value), writeExtensions);
+  return { ...doc, attrs: { pageSetup: await readDocxPageSetup(file) } };
 }
