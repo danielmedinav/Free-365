@@ -34,6 +34,10 @@
   --fs-text-on-accent: #ffffff;
   --fs-focus: #2563eb;
   --fs-danger: #c62f2f;
+  --fs-page: #ffffff;
+  --fs-page-text: #1d2330;
+  --fs-find-match: rgb(250 204 21 / 45%);
+  --fs-find-current: rgb(249 115 22 / 60%);
   --fs-overlay: rgb(15 20 30 / 40%);
   --fs-shadow: 0 1px 2px rgb(15 20 30 / 8%), 0 4px 16px rgb(15 20 30 / 8%);
   --fs-shadow-lg: 0 8px 40px rgb(15 20 30 / 18%);
@@ -53,6 +57,10 @@
   --fs-text-on-accent: #ffffff;
   --fs-focus: #6b9bff;
   --fs-danger: #ff6b6b;
+  --fs-page: #1c2028;
+  --fs-page-text: #e6e9ef;
+  --fs-find-match: rgb(234 179 8 / 35%);
+  --fs-find-current: rgb(249 115 22 / 60%);
   --fs-overlay: rgb(0 0 0 / 55%);
   --fs-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 30%);
   --fs-shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
@@ -69,4 +77,19 @@
 }
 [data-app='deck'] {
   --fs-app-accent: var(--fs-deck);
+}
+
+/* Paper is always light on paper, whatever the theme on screen. */
+@media print {
+  :root,
+  :root[data-theme='light'],
+  :root[data-theme='dark'] {
+    color-scheme: light;
+    --fs-bg: #ffffff;
+    --fs-page: #ffffff;
+    --fs-page-text: #000000;
+    --fs-surface-2: #f2f2f2;
+    --fs-border-strong: #808080;
+    --fs-text-muted: #404040;
+  }
 }

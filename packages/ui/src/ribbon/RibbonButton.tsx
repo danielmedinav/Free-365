@@ -7,7 +7,7 @@ import type { IconComponent } from './types';
 type RibbonButtonProps = {
   command: string;
   icon: IconComponent;
-  size?: 'large' | 'small';
+  size?: 'large' | 'small' | 'icon';
 };
 
 export function RibbonButton({ command: id, icon: Icon, size = 'small' }: RibbonButtonProps) {
@@ -24,6 +24,7 @@ export function RibbonButton({ command: id, icon: Icon, size = 'small' }: Ribbon
         <button
           type="button"
           className={size === 'large' ? styles.buttonLarge : styles.button}
+          aria-label={size === 'icon' ? command.label : undefined}
           disabled={!enabled}
           aria-pressed={active === undefined ? undefined : active}
           aria-keyshortcuts={shortcut?.replace(/Mod/g, 'Control')}
@@ -31,7 +32,7 @@ export function RibbonButton({ command: id, icon: Icon, size = 'small' }: Ribbon
           onClick={() => registry.execute(id)}
         >
           <Icon size={size === 'large' ? 22 : 16} aria-hidden />
-          <span className={styles.buttonLabel}>{command.label}</span>
+          {size !== 'icon' && <span className={styles.buttonLabel}>{command.label}</span>}
         </button>
       </Tooltip.Trigger>
       <Tooltip.Portal>

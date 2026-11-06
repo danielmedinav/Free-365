@@ -84,9 +84,16 @@ function Editor({ meta }: { meta: DocMeta }) {
       id: 'file.new',
       label: `New ${app.noun}`,
       shortcut: 'Alt+N',
+      allowInInputs: true,
       run: () => createDoc(meta.kind),
     },
-    { id: 'file.rename', label: 'Rename', shortcut: 'F2', run: () => setRenaming(true) },
+    {
+      id: 'file.rename',
+      label: 'Rename',
+      shortcut: 'F2',
+      allowInInputs: true,
+      run: () => setRenaming(true),
+    },
     { id: 'file.delete', label: 'Delete', run: () => setDeleting(true) },
   ]);
 

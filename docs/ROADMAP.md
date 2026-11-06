@@ -15,10 +15,14 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done
   delete, theme toggle), placeholder editor routes
 - Tests: storage and commands unit tests; Playwright test that creates, lists, renames, deletes
 
-## Milestone 1: FreeWrite MVP ⬜
+## Milestone 1: FreeWrite MVP ✅
 
 Headings, bold/italic/underline, lists, tables, images, alignment, find/replace, paper-style
 page view, undo/redo, autosave, .docx export and import (mammoth), PDF via print.
+
+Known gaps, for later: the page view is one continuous sheet (no on-screen page breaks), .docx
+import replaces the open document (no import from the home screen), and links can be typed or
+imported but have no ribbon command yet.
 
 ## Milestone 2: FreeGrid MVP ⬜
 

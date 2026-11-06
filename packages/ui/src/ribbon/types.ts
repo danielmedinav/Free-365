@@ -8,7 +8,8 @@ export type RibbonItem =
       /** Id of a registered command; label, shortcut, and state come from the registry. */
       command: string;
       icon: IconComponent;
-      size?: 'large' | 'small';
+      /** `icon` hides the label; it still names the button for screen readers and in the tooltip. */
+      size?: 'large' | 'small' | 'icon';
     }
   | {
       type: 'custom';

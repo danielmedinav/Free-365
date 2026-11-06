@@ -1,0 +1,188 @@
+.desk {
+  padding: var(--fs-space-6);
+}
+
+/* A US Letter sheet with one-inch margins. */
+.page {
+  width: 816px;
+  max-width: 100%;
+  margin: 0 auto;
+  background: var(--fs-page);
+  color: var(--fs-page-text);
+  box-shadow: var(--fs-shadow);
+}
+
+.page :global(.tiptap) {
+  min-height: 1056px;
+  padding: 96px;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+.page :global(.tiptap:focus) {
+  outline: none;
+}
+
+.page :global(.tiptap > :first-child) {
+  margin-top: 0;
+}
+
+.page :global(.tiptap p) {
+  margin: 0 0 0.6em;
+}
+
+.page :global(.tiptap h1) {
+  margin: 1em 0 0.4em;
+  font-size: 2em;
+  line-height: 1.2;
+}
+
+.page :global(.tiptap h2) {
+  margin: 1em 0 0.4em;
+  font-size: 1.5em;
+  line-height: 1.25;
+}
+
+.page :global(.tiptap h3) {
+  margin: 1em 0 0.4em;
+  font-size: 1.2em;
+}
+
+.page :global(.tiptap ul),
+.page :global(.tiptap ol) {
+  margin: 0 0 0.6em;
+  padding-left: 1.6em;
+}
+
+.page :global(.tiptap li > p) {
+  margin: 0;
+}
+
+.page :global(.tiptap blockquote) {
+  margin: 0 0 0.6em;
+  padding-left: var(--fs-space-4);
+  border-left: 3px solid var(--fs-border-strong);
+  color: var(--fs-text-muted);
+}
+
+.page :global(.tiptap pre) {
+  margin: 0 0 0.6em;
+  padding: var(--fs-space-3);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-surface-2);
+  font-family: var(--fs-font-mono);
+  white-space: pre-wrap;
+}
+
+.page :global(.tiptap code) {
+  font-family: var(--fs-font-mono);
+}
+
+.page :global(.tiptap hr) {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid var(--fs-border-strong);
+}
+
+.page :global(.tiptap hr.ProseMirror-selectednode) {
+  outline: 2px solid var(--fs-focus);
+}
+
+.page :global(.tiptap img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.page :global(.tiptap img.ProseMirror-selectednode) {
+  outline: 2px solid var(--fs-focus);
+}
+
+.page :global(.tiptap a) {
+  color: var(--fs-focus);
+}
+
+.page :global(.tiptap table) {
+  width: 100%;
+  margin: 0 0 0.6em;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.page :global(.tiptap td),
+.page :global(.tiptap th) {
+  position: relative;
+  padding: var(--fs-space-1) var(--fs-space-2);
+  border: 1px solid var(--fs-border-strong);
+  text-align: left;
+  vertical-align: top;
+}
+
+.page :global(.tiptap th) {
+  background: var(--fs-surface-2);
+  font-weight: 600;
+}
+
+.page :global(.tiptap td p),
+.page :global(.tiptap th p) {
+  margin: 0;
+}
+
+.page :global(.tiptap .selectedCell::after) {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--fs-find-match);
+  pointer-events: none;
+}
+
+.page :global(.tiptap .is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--fs-text-muted);
+  pointer-events: none;
+}
+
+.page :global(.fs-find-match) {
+  background: var(--fs-find-match);
+}
+
+.page :global(.fs-find-current) {
+  background: var(--fs-find-current);
+}
+
+.noticeActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@page {
+  margin: 1in;
+}
+
+@media print {
+  .desk {
+    padding: 0;
+  }
+
+  .page {
+    width: auto;
+    box-shadow: none;
+  }
+
+  .page :global(.tiptap) {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .page :global(.fs-find-match),
+  .page :global(.fs-find-current) {
+    background: none;
+  }
+
+  .page :global(.tiptap .is-editor-empty:first-child::before) {
+    content: none;
+  }
+}

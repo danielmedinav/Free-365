@@ -38,6 +38,10 @@
   overflow-x: auto;
 }
 
+.panel[hidden] {
+  display: none;
+}
+
 .panel:focus-visible {
   outline-offset: -2px;
 }
@@ -124,4 +128,10 @@
 .tooltipText {
   margin: var(--fs-space-1) 0 0;
   opacity: 0.85;
+}
+
+@media print {
+  .ribbon {
+    display: none;
+  }
 }

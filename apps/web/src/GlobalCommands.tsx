@@ -9,6 +9,7 @@ export function GlobalCommands() {
       label: 'Toggle dark theme',
       description: 'Switch between light and dark themes',
       shortcut: 'Alt+Shift+D',
+      allowInInputs: true,
       run: toggle,
     },
   ]);

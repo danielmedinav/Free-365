@@ -124,3 +124,20 @@
   display: flex;
   gap: var(--fs-space-4);
 }
+
+@media print {
+  .shell {
+    display: block;
+    height: auto;
+  }
+
+  .topBar,
+  .statusBar,
+  .skipLink {
+    display: none;
+  }
+
+  .content {
+    overflow: visible;
+  }
+}

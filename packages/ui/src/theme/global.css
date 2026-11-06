@@ -44,6 +44,14 @@ textarea {
   white-space: nowrap;
 }
 
+@media print {
+  html,
+  body,
+  #root {
+    height: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
