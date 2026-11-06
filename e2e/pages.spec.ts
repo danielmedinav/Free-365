@@ -272,6 +272,7 @@ test('table rows move to the next page whole, with nothing across the gap', asyn
   await page.getByRole('button', { name: 'Table', exact: true }).click();
   await expect(body(page).locator('table')).toBeVisible();
   await page.waitForTimeout(50);
+  await page.getByRole('tab', { name: 'Table' }).click();
   for (let i = 0; i < 30; i++) {
     await page.getByRole('button', { name: 'Add row' }).click();
   }

@@ -7,8 +7,12 @@ import JSZip from 'jszip';
  * are turned into real inline styles, which the editor understands.
  */
 export const PAGE_BREAK_CLASS = 'fs-page-break';
+const COLUMNS_ATTRIBUTE = 'data-fs-columns';
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const EMU_PER_PIXEL = 9525;
+const TWIPS_PER_PIXEL = 15;
 const DOCUMENT_PATH = 'word/document.xml';
 
 // Unicode private-use characters, which never appear in real documents.
@@ -17,6 +21,7 @@ const RUN_TEXT = '';
 const RUN_END = '';
 const BLOCK_START = '';
 const BLOCK_END = '';
+const IMAGE_DATA = '\ue005';
 
 const HALF_INCH_TWIPS = 720;
 const SINGLE_LINE = 240;
@@ -51,6 +56,9 @@ type Styles = Record<string, string>;
 
 /** Not sent to CSS: asks for a page break node in front of the paragraph. */
 const BREAK_BEFORE = 'break-before';
+/** Also not CSS: settings for the table cell or whole table this paragraph is in. */
+const CELL_BACKGROUND = 'cell-background';
+const TABLE_COLUMNS = 'table-columns';
 
 function child(parent: Element | null | undefined, name: string): Element | null {
   if (!parent) return null;
@@ -115,6 +123,85 @@ function blockStyles(properties: Element | null): Styles {
   return styles;
 }
 
+function drawingChild(parent: Element, name: string): Element | undefined {
+  return Array.from(parent.children).find(
+    (element) => element.namespaceURI === DRAWING_NS && element.localName === name,
+  );
+}
+
+function imageLayout(drawing: Element, inline: boolean): string {
+  if (inline) {
+    const paragraph = drawing.closest('p');
+    const align = ALIGNMENTS[attr(child(child(paragraph, 'pPr'), 'jc'), 'val') ?? ''];
+    return align === 'center' || align === 'right' ? align : 'left';
+  }
+  const horizontal = drawingChild(drawing, 'positionH');
+  const align = horizontal && drawingChild(horizontal, 'align')?.textContent;
+  const wraps = ['wrapSquare', 'wrapTight', 'wrapThrough'].some((name) =>
+    drawingChild(drawing, name),
+  );
+  if (wraps) return align === 'right' ? 'wrap-right' : 'wrap-left';
+  return align === 'center' || align === 'right' ? align : 'left';
+}
+
+/** Mammoth only keeps an image's alt text, so its size and position travel at the end of that. */
+function embedImageData(xml: Document): void {
+  for (const drawing of xml.getElementsByTagNameNS(WORD_NS, 'drawing')) {
+    const inline = drawingChild(drawing, 'inline');
+    const shape = inline ?? drawingChild(drawing, 'anchor');
+    const properties = shape && drawingChild(shape, 'docPr');
+    if (!shape || !properties) continue;
+    const pixels = Number(drawingChild(shape, 'extent')?.getAttribute('cx')) / EMU_PER_PIXEL;
+    const data = JSON.stringify({
+      width: pixels > 0 ? Math.round(pixels) : undefined,
+      layout: imageLayout(shape, !!inline),
+    });
+    const alt = properties.getAttribute('descr') ?? '';
+    properties.setAttribute('descr', `${alt}${IMAGE_DATA}${data}`);
+  }
+}
+
+function insertBlockMarker(xml: Document, paragraph: Element, styles: Styles): void {
+  const properties = child(paragraph, 'pPr');
+  const run = xml.createElementNS(WORD_NS, 'w:r');
+  const text = xml.createElementNS(WORD_NS, 'w:t');
+  text.textContent = `${BLOCK_START}${JSON.stringify(styles)}${BLOCK_END}`;
+  run.append(text);
+  paragraph.insertBefore(run, properties ? properties.nextSibling : paragraph.firstChild);
+}
+
+/** Equal columns are left out, so such a table keeps fitting whatever page it's on. */
+function customColumns(table: Element): number[] | undefined {
+  const grid = child(table, 'tblGrid');
+  if (!grid) return undefined;
+  const widths = Array.from(grid.children).map((column) => Number(attr(column, 'w')));
+  if (!widths.length || widths.some((width) => !(width > 0))) return undefined;
+  const allEqual = widths.every((width) => Math.abs(width - widths[0]!) <= widths[0]! * 0.01);
+  return allEqual ? undefined : widths.map((width) => Math.round(width / TWIPS_PER_PIXEL));
+}
+
+function embedTableData(xml: Document): void {
+  // Mammoth treats any mention of this as "on", which would make every row of such a table a header.
+  for (const flag of Array.from(xml.getElementsByTagNameNS(WORD_NS, 'tblHeader'))) {
+    if (['0', 'false', 'off'].includes(attr(flag, 'val') ?? '')) flag.remove();
+  }
+
+  for (const table of xml.getElementsByTagNameNS(WORD_NS, 'tbl')) {
+    const columns = customColumns(table);
+    const firstCell = child(child(table, 'tr'), 'tc');
+    const firstParagraph = child(firstCell, 'p');
+    if (columns && firstParagraph) {
+      insertBlockMarker(xml, firstParagraph, { [TABLE_COLUMNS]: JSON.stringify(columns) });
+    }
+  }
+  for (const cell of xml.getElementsByTagNameNS(WORD_NS, 'tc')) {
+    const fill = hexValue(attr(child(child(cell, 'tcPr'), 'shd'), 'fill'));
+    const paragraph = child(cell, 'p');
+    // Every cell gets a marker, even with no color: Mammoth drops a table whose cells are all empty.
+    if (paragraph) insertBlockMarker(xml, paragraph, fill ? { [CELL_BACKGROUND]: fill } : {});
+  }
+}
+
 function isEmpty(styles: Styles): boolean {
   return Object.keys(styles).length === 0;
 }
@@ -132,15 +219,12 @@ function embedInDocument(xml: Document): void {
   }
 
   for (const paragraph of Array.from(xml.getElementsByTagNameNS(WORD_NS, 'p'))) {
-    const properties = child(paragraph, 'pPr');
-    const styles = blockStyles(properties);
-    if (isEmpty(styles)) continue;
-    const run = xml.createElementNS(WORD_NS, 'w:r');
-    const text = xml.createElementNS(WORD_NS, 'w:t');
-    text.textContent = `${BLOCK_START}${JSON.stringify(styles)}${BLOCK_END}`;
-    run.append(text);
-    paragraph.insertBefore(run, properties ? properties.nextSibling : paragraph.firstChild);
+    const styles = blockStyles(child(paragraph, 'pPr'));
+    if (!isEmpty(styles)) insertBlockMarker(xml, paragraph, styles);
   }
+
+  embedImageData(xml);
+  embedTableData(xml);
 }
 
 /** Returns a copy of the .docx with its direct formatting embedded in the text. */
@@ -157,7 +241,11 @@ export async function embedDirectFormatting(file: ArrayBuffer): Promise<ArrayBuf
 
 function applyStyles(element: HTMLElement, payload: string): void {
   for (const [name, value] of Object.entries(JSON.parse(payload) as Styles)) {
-    if (name === BREAK_BEFORE) {
+    if (name === CELL_BACKGROUND) {
+      element.closest<HTMLElement>('td, th')?.style.setProperty('background-color', value);
+    } else if (name === TABLE_COLUMNS) {
+      element.closest('table')?.setAttribute(COLUMNS_ATTRIBUTE, value);
+    } else if (name === BREAK_BEFORE) {
       const pageBreak = element.ownerDocument.createElement('hr');
       pageBreak.className = PAGE_BREAK_CLASS;
       element.before(pageBreak);
@@ -193,6 +281,47 @@ function applyToTextNode(node: Text, parsed: Document): void {
   node.replaceWith(fragment);
 }
 
+/** Gives each cell its column widths, allowing for merged cells. */
+function applyColumnWidths(table: Element): void {
+  const widths = JSON.parse(table.getAttribute(COLUMNS_ATTRIBUTE) ?? '[]') as number[];
+  table.removeAttribute(COLUMNS_ATTRIBUTE);
+  const occupied = widths.map(() => 0);
+  for (const row of table.querySelectorAll('tr')) {
+    let column = 0;
+    for (const cell of row.children) {
+      while ((occupied[column] ?? 0) > 0) column++;
+      const colSpan = Number(cell.getAttribute('colspan') ?? 1);
+      const rowSpan = Number(cell.getAttribute('rowspan') ?? 1);
+      cell.setAttribute('colwidth', widths.slice(column, column + colSpan).join(','));
+      for (let i = column; i < column + colSpan; i++) occupied[i] = rowSpan;
+      column += colSpan;
+    }
+    occupied.forEach((value, index) => {
+      if (value > 0) occupied[index] = value - 1;
+    });
+  }
+}
+
+function applyImageData(image: Element): void {
+  const [alt = '', data] = (image.getAttribute('alt') ?? '').split(IMAGE_DATA);
+  image.setAttribute('alt', alt);
+  if (!data) return;
+  const { width, layout } = JSON.parse(data) as { width?: number; layout: string };
+  if (width) image.setAttribute('width', String(width));
+  image.setAttribute('data-layout', layout);
+}
+
+/**
+ * Images are blocks in the editor, but Mammoth writes them inside paragraphs. Move each one out in
+ * front of its paragraph, and drop the paragraph if the image was all it held.
+ */
+function liftImage(image: Element): void {
+  const paragraph = image.closest('p');
+  if (!paragraph) return;
+  paragraph.before(image);
+  if (!paragraph.textContent && !paragraph.querySelector('br, img')) paragraph.remove();
+}
+
 /** Turns the markers in Mammoth's HTML into inline styles. */
 export function applyDirectFormatting(html: string): string {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
@@ -202,6 +331,14 @@ export function applyDirectFormatting(html: string): string {
   for (const node of nodes) {
     if (/[-]/.test(node.data)) applyToTextNode(node, parsed);
   }
+  for (const image of parsed.body.querySelectorAll('img')) {
+    applyImageData(image);
+    liftImage(image);
+  }
+  for (const table of parsed.body.querySelectorAll(`table[${COLUMNS_ATTRIBUTE}]`)) {
+    applyColumnWidths(table);
+  }
+
   // Mammoth writes a page break inside a paragraph, and HTML splits that around it, leaving empty
   // paragraphs behind that were never in the document.
   for (const pageBreak of parsed.body.querySelectorAll(`hr.${PAGE_BREAK_CLASS}`)) {

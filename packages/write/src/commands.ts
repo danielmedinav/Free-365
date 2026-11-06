@@ -11,6 +11,7 @@ import {
   TEXT_COLORS,
   toHexColor,
 } from './formatting';
+import { IMAGE_LAYOUTS, MIN_IMAGE_WIDTH } from './imageExtension';
 import {
   isLandscape,
   MARGIN_PRESETS,
@@ -136,6 +137,9 @@ const TABLE_ACTIONS: TableAction[] = [
   { id: 'write.deleteRow', label: 'Delete row', apply: (c) => c.deleteRow() },
   { id: 'write.deleteColumn', label: 'Delete column', apply: (c) => c.deleteColumn() },
   { id: 'write.deleteTable', label: 'Delete table', apply: (c) => c.deleteTable() },
+  { id: 'write.mergeCells', label: 'Merge cells', apply: (c) => c.mergeCells() },
+  { id: 'write.splitCell', label: 'Split cell', apply: (c) => c.splitCell() },
+  { id: 'write.headerRow', label: 'Header row', apply: (c) => c.toggleHeaderRow() },
 ];
 
 /** Removed by Clear formatting. Links stay: they're content as much as appearance. */
@@ -253,6 +257,8 @@ export function createWriteCommands(editor: Editor, actions: WriteActions): Comm
     },
 
     ...createPageCommands(editor, run, can, actions),
+    ...createImageCommands(editor, run),
+    ...createCellColorCommands(editor, run, can),
 
     {
       id: 'write.insertTable',
@@ -490,5 +496,73 @@ function createPageCommands(
       description: 'Set exact margins and the text at the top and bottom of every page',
       run: actions.openPageSetup,
     },
+  ];
+}
+
+/** Displayed width of the selected image, including any limit from the page margins. */
+function selectedImageWidth(editor: Editor): number | undefined {
+  const dom = editor.view.nodeDOM(editor.state.selection.from);
+  const image = dom instanceof HTMLElement ? dom.querySelector('img') : null;
+  return image?.getBoundingClientRect().width;
+}
+
+function createImageCommands(editor: Editor, run: ChainStep): Command[] {
+  const isImage = () => editor.isActive('image');
+  const scale = (factor: number) => () => {
+    const width = selectedImageWidth(editor);
+    if (width === undefined) return;
+    const next = Math.max(MIN_IMAGE_WIDTH, Math.round(width * factor));
+    editor.chain().focus().updateAttributes('image', { width: next }).run();
+  };
+
+  return [
+    ...IMAGE_LAYOUTS.map(({ value, label }): Command => ({
+      id: `write.imageLayout-${value}`,
+      label,
+      run: run((c) => c.updateAttributes('image', { layout: value })),
+      isEnabled: isImage,
+      isActive: () => editor.isActive('image', { layout: value }),
+    })),
+    {
+      id: 'write.imageSmaller',
+      label: 'Smaller',
+      description: 'Make the selected image 10% smaller, or drag its corner',
+      run: scale(0.9),
+      isEnabled: isImage,
+    },
+    {
+      id: 'write.imageLarger',
+      label: 'Larger',
+      description: 'Make the selected image 10% larger, or drag its corner',
+      run: scale(1.1),
+      isEnabled: isImage,
+    },
+    {
+      id: 'write.imageOriginalSize',
+      label: 'Original size',
+      run: run((c) => c.updateAttributes('image', { width: null })),
+      isEnabled: isImage,
+    },
+  ];
+}
+
+function createCellColorCommands(editor: Editor, run: ChainStep, can: ChainCheck): Command[] {
+  const clear = (c: ChainedCommands) => c.setCellColor(null);
+  return [
+    {
+      id: 'write.cellColor-default',
+      label: 'No color',
+      run: run(clear),
+      isEnabled: can(clear),
+    },
+    ...HIGHLIGHT_COLORS.map(({ name, hex }): Command => {
+      const apply = (c: ChainedCommands) => c.setCellColor(hex);
+      return {
+        id: `write.cellColor-${slug(name)}`,
+        label: `${name} cell`,
+        run: run(apply),
+        isEnabled: can(apply),
+      };
+    }),
   ];
 }

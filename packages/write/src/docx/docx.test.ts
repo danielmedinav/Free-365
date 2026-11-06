@@ -8,6 +8,9 @@ import {
   PageBreak,
   Packer,
   Paragraph,
+  Table,
+  TableCell,
+  TableRow,
   TextRun,
 } from 'docx';
 import JSZip from 'jszip';
@@ -173,6 +176,8 @@ describe('.docx round trip', () => {
     expect(blocks(result)[0]?.type).toBe('table');
     expect(rows).toHaveLength(3);
     expect(rows[0]?.content?.map((c) => c.type)).toEqual(['tableHeader', 'tableHeader']);
+    expect(rows[1]?.content?.map((c) => c.type)).toEqual(['tableCell']);
+    expect(rows[2]?.content?.map((c) => c.type)).toEqual(['tableCell', 'tableCell']);
     expect(rows[1]?.content?.[0]?.attrs?.colspan).toBe(2);
     expect(rows[2]?.content?.[1]?.content?.[0]?.content?.[0]?.text).toBe('2');
   });
@@ -391,6 +396,128 @@ describe('.docx round trip', () => {
     expect(xml).toContain('w:w="6480"'); // 4.5 inches
   });
 
+  it('keeps image sizes and every position on the page', async () => {
+    const image = (layout: string, width: number): JSONContent => ({
+      type: 'image',
+      attrs: { src: PNG_SRC, alt: `pic-${layout}`, layout, width },
+    });
+    const layouts = ['left', 'center', 'right', 'wrap-left', 'wrap-right'];
+    const result = await roundTrip(
+      doc(...layouts.flatMap((layout, i) => [image(layout, 100 + i), para(text(`text ${i}`))])),
+    );
+    const images = blocks(result).filter((b) => b.type === 'image');
+    expect(images.map((b) => b.attrs?.layout)).toEqual(layouts);
+    expect(images.map((b) => b.attrs?.width)).toEqual([100, 101, 102, 103, 104]);
+    expect(images.map((b) => b.attrs?.alt)).toEqual(layouts.map((layout) => `pic-${layout}`));
+    expect(blocks(result).filter((b) => b.type === 'paragraph')).toHaveLength(layouts.length);
+  });
+
+  it('keeps a wrapped image when nothing follows it', async () => {
+    const result = await roundTrip(
+      doc({ type: 'image', attrs: { src: PNG_SRC, layout: 'wrap-right', width: 50 } }),
+    );
+    expect(blocks(result)[0]?.attrs?.layout).toBe('wrap-right');
+  });
+
+  it('limits an image to the width between the margins', async () => {
+    const result = await roundTrip({
+      ...doc({ type: 'image', attrs: { src: PNG_SRC, width: 5000 } }),
+      attrs: { pageSetup: { widthIn: 8.5, marginLeftIn: 1, marginRightIn: 1 } },
+    });
+    expect(blocks(result)[0]?.attrs?.width).toBe(624);
+  });
+
+  const cell = (value: string, attrs: object = {}, type = 'tableCell'): JSONContent => ({
+    type,
+    attrs: { colspan: 1, rowspan: 1, ...attrs },
+    content: [para(text(value))],
+  });
+  const row = (...content: JSONContent[]): JSONContent => ({ type: 'tableRow', content });
+
+  it('keeps cell colors, including on empty cells', async () => {
+    const result = await roundTrip(
+      doc({
+        type: 'table',
+        content: [
+          row(
+            cell('a', { backgroundColor: '#fff176' }, 'tableHeader'),
+            cell('b', {}, 'tableHeader'),
+          ),
+          row(
+            { ...cell('c', { backgroundColor: '#90caf9' }), content: [{ type: 'paragraph' }] },
+            cell('d'),
+          ),
+        ],
+      }),
+    );
+    const rows = blocks(result)[0]?.content ?? [];
+    expect(toHexColor(rows[0]?.content?.[0]?.attrs?.backgroundColor)).toBe('#fff176');
+    expect(rows[0]?.content?.[1]?.attrs?.backgroundColor).toBeNull();
+    expect(toHexColor(rows[1]?.content?.[0]?.attrs?.backgroundColor)).toBe('#90caf9');
+    expect(JSON.stringify(result)).not.toMatch(/[\ue000-\ue005]/);
+  });
+
+  it('keeps a table whose cells are all empty', async () => {
+    const empty = (attrs: object = {}, type = 'tableCell'): JSONContent => ({
+      type,
+      attrs: { colspan: 1, rowspan: 1, ...attrs },
+      content: [{ type: 'paragraph' }],
+    });
+    const result = await roundTrip(
+      doc({
+        type: 'table',
+        content: [
+          row(empty({}, 'tableHeader'), empty({}, 'tableHeader')),
+          row(empty({ colspan: 2 })),
+        ],
+      }),
+    );
+    const rows = blocks(result)[0]?.content ?? [];
+    expect(blocks(result)[0]?.type).toBe('table');
+    expect(rows.map((r) => r.content?.length)).toEqual([2, 1]);
+    expect(rows[1]?.content?.[0]?.attrs?.colspan).toBe(2);
+    expect(JSON.stringify(result)).not.toMatch(/[\ue000-\ue005]/);
+  });
+
+  it('keeps cells merged across rows and across columns', async () => {
+    const result = await roundTrip(
+      doc({
+        type: 'table',
+        content: [
+          row(cell('tall', { rowspan: 2 }), cell('b'), cell('c')),
+          row(cell('wide', { colspan: 2 })),
+          row(cell('x'), cell('y'), cell('z')),
+        ],
+      }),
+    );
+    const rows = blocks(result)[0]?.content ?? [];
+    expect(rows.map((r) => r.content?.length)).toEqual([3, 1, 3]);
+    expect(rows[0]?.content?.[0]?.attrs?.rowspan).toBe(2);
+    expect(rows[1]?.content?.[0]?.attrs?.colspan).toBe(2);
+    expect(() => PmNode.fromJSON(getSchema(writeExtensions), result).check()).not.toThrow();
+  });
+
+  it('keeps resized column widths, allowing for merged cells', async () => {
+    const result = await roundTrip(
+      doc({
+        type: 'table',
+        content: [
+          row(cell('a', { colwidth: [100] }), cell('b', { colwidth: [200] })),
+          row(cell('wide', { colspan: 2, colwidth: [100, 200] })),
+        ],
+      }),
+    );
+    const rows = blocks(result)[0]?.content ?? [];
+    expect(rows[0]?.content?.map((c) => c.attrs?.colwidth)).toEqual([[100], [200]]);
+    expect(rows[1]?.content?.[0]?.attrs?.colwidth).toEqual([100, 200]);
+  });
+
+  it('leaves equal columns flexible, so tables fit the page they land on', async () => {
+    const result = await roundTrip(doc({ type: 'table', content: [row(cell('a'), cell('b'))] }));
+    const cells = blocks(result)[0]?.content?.[0]?.content ?? [];
+    expect(cells.map((c) => c.attrs?.colwidth)).toEqual([null, null]);
+  });
+
   it('handles an empty document', async () => {
     const result = await roundTrip(doc());
     expect(result.type).toBe('doc');
@@ -528,6 +655,31 @@ describe('importDocx with files from other programs', () => {
       ['pageBreak', undefined],
       ['paragraph', 'two'],
     ]);
+  });
+
+  it('does not mistake a row marked "not a header" for a header', async () => {
+    const result = await (async () => {
+      const blob = await Packer.toBlob(
+        new Document({
+          sections: [
+            {
+              children: [
+                new Table({
+                  rows: [
+                    new TableRow({
+                      tableHeader: false,
+                      children: [new TableCell({ children: [new Paragraph('a')] })],
+                    }),
+                  ],
+                }),
+              ],
+            },
+          ],
+        }),
+      );
+      return importDocx(await blob.arrayBuffer());
+    })();
+    expect(blocks(result)[0]?.content?.[0]?.content?.[0]?.type).toBe('tableCell');
   });
 
   it('keeps a font name with odd characters from breaking the document', async () => {

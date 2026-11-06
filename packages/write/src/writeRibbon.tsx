@@ -17,6 +17,13 @@ import {
   Highlighter,
   FileSliders,
   ImagePlus,
+  Maximize2,
+  Minimize2,
+  PaintBucket,
+  RotateCcw,
+  Rows2,
+  TableCellsMerge,
+  TableCellsSplit,
   IndentDecrease,
   IndentIncrease,
   Italic,
@@ -50,6 +57,7 @@ import {
   TEXT_COLORS,
   toPoints,
 } from './formatting';
+import { IMAGE_LAYOUTS } from './imageExtension';
 import { MARGIN_PRESETS, PAGE_SIZES } from './pageSetup';
 
 const TRANSFER_GROUP: RibbonGroup = {
@@ -243,18 +251,87 @@ const INSERT_TAB: RibbonTab = {
       ],
     },
     {
-      id: 'table',
-      label: 'Table',
+      id: 'picture',
+      label: 'Selected image',
+      width: 230,
       items: [
-        { type: 'command', command: 'write.addRow', icon: BetweenHorizontalEnd },
-        { type: 'command', command: 'write.addColumn', icon: BetweenVerticalEnd },
-        { type: 'command', command: 'write.deleteRow', icon: Trash2 },
-        { type: 'command', command: 'write.deleteColumn', icon: Trash2 },
-        { type: 'command', command: 'write.deleteTable', icon: Trash2 },
+        {
+          type: 'custom',
+          id: 'image-layout',
+          render: () => (
+            <CommandSelect
+              label="Image position"
+              width={220}
+              currentLabel={() => 'Select an image first'}
+              options={IMAGE_LAYOUTS.map(({ value, label }) => ({
+                command: `write.imageLayout-${value}`,
+                label,
+              }))}
+            />
+          ),
+        },
+        { type: 'command', command: 'write.imageSmaller', icon: Minimize2, size: 'icon' },
+        { type: 'command', command: 'write.imageLarger', icon: Maximize2, size: 'icon' },
+        { type: 'command', command: 'write.imageOriginalSize', icon: RotateCcw, size: 'icon' },
       ],
     },
   ],
 };
+
+function buildTableTab(editor: Editor): RibbonTab {
+  return {
+    id: 'table',
+    label: 'Table',
+    groups: [
+      {
+        id: 'rows',
+        label: 'Rows and columns',
+        width: 240,
+        items: [
+          { type: 'command', command: 'write.addRow', icon: BetweenHorizontalEnd },
+          { type: 'command', command: 'write.addColumn', icon: BetweenVerticalEnd },
+          { type: 'command', command: 'write.deleteRow', icon: Trash2 },
+          { type: 'command', command: 'write.deleteColumn', icon: Trash2 },
+        ],
+      },
+      {
+        id: 'cells',
+        label: 'Cells',
+        items: [
+          { type: 'command', command: 'write.mergeCells', icon: TableCellsMerge, size: 'large' },
+          { type: 'command', command: 'write.splitCell', icon: TableCellsSplit, size: 'large' },
+          {
+            type: 'custom',
+            id: 'cell-color',
+            render: () => (
+              <ColorMenu
+                label="Cell color"
+                icon={PaintBucket}
+                clearCommand="write.cellColor-default"
+                current={() => {
+                  const cell = editor.isActive('tableHeader') ? 'tableHeader' : 'tableCell';
+                  return editor.getAttributes(cell).backgroundColor as string | undefined;
+                }}
+                swatches={HIGHLIGHT_COLORS.map(({ name, hex }) => ({
+                  command: `write.cellColor-${slug(name)}`,
+                  color: hex,
+                }))}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        id: 'table',
+        label: 'Table',
+        items: [
+          { type: 'command', command: 'write.headerRow', icon: Rows2, size: 'large' },
+          { type: 'command', command: 'write.deleteTable', icon: Trash2, size: 'large' },
+        ],
+      },
+    ],
+  };
+}
 
 const LAYOUT_TAB: RibbonTab = {
   id: 'layout',
@@ -347,5 +424,6 @@ export function buildWriteRibbon(fileTab: RibbonTab, editor: Editor): RibbonTab[
     buildHomeTab(editor),
     INSERT_TAB,
     LAYOUT_TAB,
+    buildTableTab(editor),
   ];
 }

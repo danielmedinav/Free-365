@@ -129,7 +129,31 @@
   outline: 2px solid var(--fs-focus);
 }
 
-.page :global(.tiptap img) {
+.page :global(.fs-image) {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.page :global(.fs-image[data-layout='center']) {
+  margin-inline: auto;
+}
+
+.page :global(.fs-image[data-layout='right']) {
+  margin-left: auto;
+}
+
+.page :global(.fs-image[data-layout='wrap-left']) {
+  float: left;
+  margin: 0 12px 6px 0;
+}
+
+.page :global(.fs-image[data-layout='wrap-right']) {
+  float: right;
+  margin: 0 0 6px 12px;
+}
+
+.page :global(.fs-image img) {
   display: block;
   max-width: 100%;
   max-height: var(--fs-content-height);
@@ -137,8 +161,33 @@
   object-fit: contain;
 }
 
-.page :global(.tiptap img.ProseMirror-selectednode) {
+.page :global(.fs-image.ProseMirror-selectednode img) {
   outline: 2px solid var(--fs-focus);
+}
+
+.page :global(.fs-image-handle) {
+  display: none;
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fs-page);
+  border-radius: 50%;
+  background: var(--fs-focus);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.page :global(.fs-image[data-layout='right'] .fs-image-handle),
+.page :global(.fs-image[data-layout='wrap-right'] .fs-image-handle) {
+  right: auto;
+  left: -5px;
+  cursor: nesw-resize;
+}
+
+.page :global(.fs-image.ProseMirror-selectednode .fs-image-handle) {
+  display: block;
 }
 
 .page :global(.tiptap a) {
@@ -169,6 +218,25 @@
 .page :global(.tiptap td p),
 .page :global(.tiptap th p) {
   margin: 0;
+}
+
+.page :global(.tiptap .tableWrapper) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.page :global(.tiptap .column-resize-handle) {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: var(--fs-focus);
+  pointer-events: none;
+}
+
+.page :global(.tiptap.resize-cursor) {
+  cursor: col-resize;
 }
 
 .page :global(.tiptap .selectedCell::after) {

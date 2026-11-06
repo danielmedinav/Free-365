@@ -7,6 +7,8 @@ import {
   Footer,
   Header,
   HeadingLevel,
+  HorizontalPositionAlign,
+  HorizontalPositionRelativeFrom,
   ImageRun,
   LevelFormat,
   PageBreak,
@@ -20,12 +22,17 @@ import {
   TableRow,
   TabStopType,
   TextRun,
+  TextWrappingSide,
+  TextWrappingType,
+  VerticalPositionRelativeFrom,
   WidthType,
   type IParagraphOptions,
   type ParagraphChild,
 } from 'docx';
 import { INDENT_STEP_INCHES, primaryFont, toHexColor, toPoints } from '../formatting';
 import { isLandscape, PX_PER_INCH, readPageSetup, type PageSetup } from '../pageSetup';
+import { readImageLayout, type ImageLayout } from '../imageExtension';
+import { tableColumnWidths } from '../tableFormat';
 import { readImageSize } from './imageSize';
 import { CODE_BLOCK_STYLE, DIVIDER_STYLE, INLINE_CODE_STYLE, QUOTE_STYLE } from './styleNames';
 
@@ -135,63 +142,128 @@ function blockFormat(node: JSONContent, context: BlockContext): IParagraphOption
   };
 }
 
-function imageParagraph(node: JSONContent, context: BlockContext, maxWidthPx: number): Paragraph {
-  const src = String(node.attrs?.src ?? '');
-  const alt = String(node.attrs?.alt ?? '');
-  const decoded = decodeDataUrl(src);
+const IMAGE_ALIGNMENT: Partial<Record<ImageLayout, IParagraphOptions['alignment']>> = {
+  center: AlignmentType.CENTER,
+  right: AlignmentType.RIGHT,
+};
+
+const EMU_PER_PIXEL = 9525;
+
+function isWrapped(node: JSONContent): boolean {
+  return String(node.attrs?.layout).startsWith('wrap-');
+}
+
+function floatingOptions(layout: ImageLayout) {
+  const onRight = layout === 'wrap-right';
+  const gap = 12 * EMU_PER_PIXEL;
+  return {
+    horizontalPosition: {
+      relative: HorizontalPositionRelativeFrom.MARGIN,
+      align: onRight ? HorizontalPositionAlign.RIGHT : HorizontalPositionAlign.LEFT,
+    },
+    verticalPosition: { relative: VerticalPositionRelativeFrom.PARAGRAPH, offset: 0 },
+    wrap: { type: TextWrappingType.SQUARE, side: TextWrappingSide.BOTH_SIDES },
+    margins: {
+      top: 0,
+      bottom: gap / 2,
+      left: onRight ? gap : 0,
+      right: onRight ? 0 : gap,
+    },
+  };
+}
+
+/** The run for an embeddable image, or undefined if this file format can't hold it. */
+function imageRun(node: JSONContent, maxWidthPx: number): ParagraphChild | undefined {
+  const decoded = decodeDataUrl(String(node.attrs?.src ?? ''));
   const type = decoded && IMAGE_TYPES[decoded.mimeType];
   const size = decoded && readImageSize(decoded.bytes);
+  if (!decoded || !type || !size) return undefined;
 
-  if (!decoded || !type || !size) {
-    // Linked images and formats .docx can't embed: keep a visible trace instead of dropping them.
-    const label = `[Image${alt ? `: ${alt}` : ''}]`;
-    const children = src.startsWith('http')
-      ? [new ExternalHyperlink({ link: src, children: [new TextRun({ text: label })] })]
-      : [new TextRun({ text: label })];
-    return new Paragraph({ ...context.paragraph, children });
+  const alt = String(node.attrs?.alt ?? '');
+  const layout = readImageLayout(node.attrs?.layout);
+  const chosen = Number(node.attrs?.width) || size.width;
+  const width = Math.min(chosen, maxWidthPx);
+  return new ImageRun({
+    type,
+    data: decoded.bytes,
+    transformation: {
+      width: Math.round(width),
+      height: Math.round((width / size.width) * size.height),
+    },
+    altText: { name: alt, title: alt, description: alt },
+    ...(isWrapped(node) ? { floating: floatingOptions(layout) } : {}),
+  });
+}
+
+function imageParagraph(node: JSONContent, context: BlockContext, maxWidthPx: number): Paragraph {
+  const run = imageRun(node, maxWidthPx);
+  if (run) {
+    return new Paragraph({
+      ...context.paragraph,
+      alignment: IMAGE_ALIGNMENT[readImageLayout(node.attrs?.layout)],
+      children: [run],
+    });
   }
 
-  const scale = Math.min(1, maxWidthPx / size.width);
-  return new Paragraph({
-    ...context.paragraph,
-    children: [
-      new ImageRun({
-        type,
-        data: decoded.bytes,
-        transformation: {
-          width: Math.round(size.width * scale),
-          height: Math.round(size.height * scale),
-        },
-        altText: { name: alt, title: alt, description: alt },
-      }),
-    ],
-  });
+  // Linked images and formats .docx can't embed: keep a visible trace instead of dropping them.
+  const src = String(node.attrs?.src ?? '');
+  const alt = String(node.attrs?.alt ?? '');
+  const label = `[Image${alt ? `: ${alt}` : ''}]`;
+  const children = src.startsWith('http')
+    ? [new ExternalHyperlink({ link: src, children: [new TextRun({ text: label })] })]
+    : [new TextRun({ text: label })];
+  return new Paragraph({ ...context.paragraph, children });
 }
 
 function tableBlock(node: JSONContent, convertBlocks: BlockConverter, widthTwips: number): Table {
   const rows = node.content ?? [];
-  const columnCount = (rows[0]?.content ?? []).reduce(
-    (total, cell) => total + Number(cell.attrs?.colspan ?? 1),
-    0,
+  const columnWidths = tableColumnWidths(
+    (rows[0]?.content ?? []).map((cell) => ({
+      colspan: Number(cell.attrs?.colspan ?? 1),
+      colwidth: (cell.attrs?.colwidth as (number | null)[] | null | undefined) ?? null,
+    })),
+    widthTwips,
   );
-  const columnWidth = Math.floor(widthTwips / Math.max(columnCount, 1));
+  const tableWidth = columnWidths.reduce((total, width) => total + width, 0);
+
+  // Which grid column each row's next cell starts in, allowing for cells merged from above.
+  const occupied = columnWidths.map(() => 0);
 
   return new Table({
-    width: { size: widthTwips, type: WidthType.DXA },
-    columnWidths: Array.from({ length: columnCount }, () => columnWidth),
+    width: { size: tableWidth, type: WidthType.DXA },
+    columnWidths,
     rows: rows.map((row) => {
       const cells = row.content ?? [];
+      let column = 0;
+      const children = cells.map((cell) => {
+        while ((occupied[column] ?? 0) > 0) column++;
+        const columnSpan = Number(cell.attrs?.colspan ?? 1);
+        const rowSpan = Number(cell.attrs?.rowspan ?? 1);
+        const width = columnWidths
+          .slice(column, column + columnSpan)
+          .reduce((total, value) => total + value, 0);
+        for (let i = column; i < column + columnSpan; i++) occupied[i] = rowSpan;
+        column += columnSpan;
+        const background = toHexColor(cell.attrs?.backgroundColor);
+        return new TableCell({
+          columnSpan,
+          rowSpan,
+          width: { size: width, type: WidthType.DXA },
+          ...(background
+            ? { shading: { type: ShadingType.CLEAR, color: 'auto', fill: background.slice(1) } }
+            : {}),
+          children: convertBlocks(cell.content ?? [], { listLevel: -1, paragraph: {} }),
+        });
+      });
+      occupied.forEach((value, index) => {
+        if (value > 0) occupied[index] = value - 1;
+      });
       return new TableRow({
-        tableHeader: cells.length > 0 && cells.every((c) => c.type === 'tableHeader'),
-        children: cells.map((cell) => {
-          const columnSpan = Number(cell.attrs?.colspan ?? 1);
-          return new TableCell({
-            columnSpan,
-            rowSpan: Number(cell.attrs?.rowspan ?? 1),
-            width: { size: columnWidth * columnSpan, type: WidthType.DXA },
-            children: convertBlocks(cell.content ?? [], { listLevel: -1, paragraph: {} }),
-          });
-        }),
+        // Left out unless true: readers can mistake an explicit "off" for "on".
+        ...(cells.length > 0 && cells.every((c) => c.type === 'tableHeader')
+          ? { tableHeader: true }
+          : {}),
+        children,
       });
     }),
   });
@@ -226,15 +298,22 @@ function createBlockConverter(setup: PageSetup): BlockConverter {
   }
 
   function convert(nodes: JSONContent[], context: BlockContext): Block[] {
-    return nodes.flatMap((node): Block[] => {
+    const maxImageWidth = contentWidth * PX_PER_INCH;
+    // A wrapped image belongs at the start of the next paragraph, so the text starts level with it.
+    let waitingImages: ParagraphChild[] = [];
+
+    return nodes.flatMap((node, index): Block[] => {
       switch (node.type) {
-        case 'paragraph':
+        case 'paragraph': {
+          const images = waitingImages;
+          waitingImages = [];
           return [
             new Paragraph({
               ...blockFormat(node, context),
-              children: inlineChildren(node.content),
+              children: [...images, ...inlineChildren(node.content)],
             }),
           ];
+        }
         case 'heading':
           return [
             new Paragraph({
@@ -262,8 +341,14 @@ function createBlockConverter(setup: PageSetup): BlockConverter {
           );
         case 'horizontalRule':
           return [new Paragraph({ ...context.paragraph, style: 'Divider' })];
-        case 'image':
-          return [imageParagraph(node, context, contentWidth * PX_PER_INCH)];
+        case 'image': {
+          const run = isWrapped(node) ? imageRun(node, maxImageWidth) : undefined;
+          if (run && nodes[index + 1]?.type === 'paragraph') {
+            waitingImages.push(run);
+            return [];
+          }
+          return [imageParagraph(node, context, maxImageWidth)];
+        }
         case 'table':
           return [tableBlock(node, convert, twips(contentWidth))];
         case 'pageBreak':

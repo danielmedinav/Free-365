@@ -26,10 +26,15 @@ superscript/subscript, and clear formatting.
 Page layout: real on-screen pages, page breaks, paper size, orientation, margins, one-line headers
 and footers, and page numbers, all kept in .docx export and import and matched when printing.
 
+Images and tables: drag or button resizing, image position and text wrap, column resizing, merged
+cells, and cell colors, all kept in .docx export and import.
+
 Known gaps, for later: .docx import replaces the open document (no import from the home screen),
 and reads formatting set directly on text and paragraphs, but not formatting inherited from named
 styles or themes. Headers and footers are one plain line, the same on every page. A table row taller
-than a page runs across the gap, and header rows don't repeat on later pages.
+than a page runs across the gap, a cell merged across rows that a page break falls between runs
+across it too, and header rows don't repeat on later pages. Wrapped images sit at the left or right
+margin only; they can't be dragged to any spot on the page.
 
 ## Milestone 2: FreeGrid MVP ⬜
 

@@ -344,13 +344,15 @@ test('find and replace', async ({ page }) => {
 });
 
 test('tables can be inserted and edited', async ({ page }) => {
-  await page.getByRole('tab', { name: 'Insert' }).click();
+  await page.getByRole('tab', { name: 'Table' }).click();
   await expect(button(page, 'Add row')).toBeDisabled();
 
+  await page.getByRole('tab', { name: 'Insert' }).click();
   await format(page, 'Table');
   await expect(body(page).locator('tr')).toHaveCount(3);
   await page.keyboard.type('cell');
   await expect(body(page).locator('th').first()).toHaveText('cell');
+  await page.getByRole('tab', { name: 'Table' }).click();
 
   await button(page, 'Add row').click();
   await expect(body(page).locator('tr')).toHaveCount(4);
