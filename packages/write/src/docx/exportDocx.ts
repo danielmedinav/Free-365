@@ -9,6 +9,7 @@ import {
   LevelFormat,
   Packer,
   Paragraph,
+  ShadingType,
   Table,
   TableCell,
   TableRow,
@@ -17,6 +18,7 @@ import {
   type IParagraphOptions,
   type ParagraphChild,
 } from 'docx';
+import { INDENT_STEP_INCHES, primaryFont, toHexColor, toPoints } from '../formatting';
 import { readImageSize } from './imageSize';
 import { CODE_BLOCK_STYLE, DIVIDER_STYLE, INLINE_CODE_STYLE, QUOTE_STYLE } from './styleNames';
 
@@ -26,6 +28,11 @@ const MAX_LIST_LEVEL = 8;
 const TEXT_WIDTH_TWIPS = 9360;
 const TEXT_WIDTH_PIXELS = 624;
 const LIST_INDENT_TWIPS = 360;
+const TWIPS_PER_INCH = 1440;
+const SINGLE_LINE = 240;
+/** Matches the editor's default look, so documents keep their shape in other programs. */
+const DEFAULT_LINE_SPACING = 1.15;
+const DEFAULT_PARAGRAPH_GAP_TWIPS = 120;
 
 const HEADINGS = [
   HeadingLevel.HEADING_1,
@@ -69,12 +76,24 @@ function textRun(node: JSONContent): ParagraphChild {
   const marks = node.marks ?? [];
   const has = (type: string) => marks.some((m) => m.type === type);
   const link = marks.find((m) => m.type === 'link');
+  const textStyle = marks.find((m) => m.type === 'textStyle')?.attrs;
+  const color = toHexColor(textStyle?.color);
+  const background = toHexColor(textStyle?.backgroundColor);
+  const points = toPoints(textStyle?.fontSize);
   const run = new TextRun({
     text: node.text ?? '',
     bold: has('bold'),
     italics: has('italic'),
     strike: has('strike'),
     underline: has('underline') ? {} : undefined,
+    superScript: has('superscript'),
+    subScript: has('subscript'),
+    font: primaryFont(textStyle?.fontFamily),
+    size: points === undefined ? undefined : Math.round(points * 2),
+    color: color?.slice(1),
+    shading: background
+      ? { type: ShadingType.CLEAR, color: 'auto', fill: background.slice(1) }
+      : undefined,
     style: has('code') ? 'InlineCode' : link ? 'Hyperlink' : undefined,
   });
   const href: unknown = link?.attrs?.href;
@@ -87,6 +106,20 @@ function inlineChildren(nodes: JSONContent[] | undefined): ParagraphChild[] {
   return (nodes ?? []).map((node) =>
     node.type === 'hardBreak' ? new TextRun({ break: 1 }) : textRun(node),
   );
+}
+
+/** The paragraph-level settings shared by paragraphs and headings. */
+function blockFormat(node: JSONContent, context: BlockContext): IParagraphOptions {
+  const spacing = Number(node.attrs?.lineSpacing ?? 0);
+  const indent = Number(node.attrs?.indent ?? 0);
+  return {
+    ...context.paragraph,
+    alignment: ALIGNMENTS[String(node.attrs?.textAlign)],
+    ...(spacing ? { spacing: { line: Math.round(spacing * SINGLE_LINE) } } : {}),
+    ...(indent
+      ? { indent: { left: Math.round(indent * INDENT_STEP_INCHES * TWIPS_PER_INCH) } }
+      : {}),
+  };
 }
 
 function imageParagraph(node: JSONContent, context: BlockContext): Paragraph {
@@ -179,21 +212,18 @@ function createBlockConverter(): BlockConverter {
 
   function convert(nodes: JSONContent[], context: BlockContext): Block[] {
     return nodes.flatMap((node): Block[] => {
-      const alignment = ALIGNMENTS[String(node.attrs?.textAlign)];
       switch (node.type) {
         case 'paragraph':
           return [
             new Paragraph({
-              ...context.paragraph,
-              alignment,
+              ...blockFormat(node, context),
               children: inlineChildren(node.content),
             }),
           ];
         case 'heading':
           return [
             new Paragraph({
-              ...context.paragraph,
-              alignment,
+              ...blockFormat(node, context),
               heading: HEADINGS[Number(node.attrs?.level ?? 1) - 1],
               children: inlineChildren(node.content),
             }),
@@ -255,7 +285,17 @@ export async function exportDocx(doc: JSONContent, title?: string): Promise<Blob
     creator: 'Free 360',
     numbering: { config: [{ reference: ORDERED_LIST, levels: orderedListLevels() }] },
     styles: {
-      default: { document: { run: { font: 'Arial', size: 22 } } },
+      default: {
+        document: {
+          run: { font: 'Arial', size: 22 },
+          paragraph: {
+            spacing: {
+              after: DEFAULT_PARAGRAPH_GAP_TWIPS,
+              line: Math.round(DEFAULT_LINE_SPACING * SINGLE_LINE),
+            },
+          },
+        },
+      },
       paragraphStyles: [
         {
           id: 'Quote',

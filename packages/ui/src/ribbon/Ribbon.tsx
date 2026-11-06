@@ -28,7 +28,10 @@ export function Ribbon({ tabs, defaultTab }: RibbonProps) {
           <Tabs.Content key={tab.id} value={tab.id} className={styles.panel}>
             {tab.groups.map((group) => (
               <div key={group.id} role="group" aria-label={group.label} className={styles.group}>
-                <div className={styles.groupItems}>
+                <div
+                  className={styles.groupItems}
+                  style={group.width ? { width: group.width, flexWrap: 'wrap' } : undefined}
+                >
                   {group.items.map((item) =>
                     item.type === 'command' ? (
                       <RibbonButton

@@ -20,6 +20,8 @@ export type RibbonItem =
 export type RibbonGroup = {
   id: string;
   label: string;
+  /** Fixes the group's width in pixels so its items wrap onto two rows. */
+  width?: number;
   items: RibbonItem[];
 };
 

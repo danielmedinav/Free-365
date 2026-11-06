@@ -34,8 +34,6 @@
   --fs-text-on-accent: #ffffff;
   --fs-focus: #2563eb;
   --fs-danger: #c62f2f;
-  --fs-page: #ffffff;
-  --fs-page-text: #1d2330;
   --fs-find-match: rgb(250 204 21 / 45%);
   --fs-find-current: rgb(249 115 22 / 60%);
   --fs-overlay: rgb(15 20 30 / 40%);
@@ -57,8 +55,6 @@
   --fs-text-on-accent: #ffffff;
   --fs-focus: #6b9bff;
   --fs-danger: #ff6b6b;
-  --fs-page: #1c2028;
-  --fs-page-text: #e6e9ef;
   --fs-find-match: rgb(234 179 8 / 35%);
   --fs-find-current: rgb(249 115 22 / 60%);
   --fs-overlay: rgb(0 0 0 / 55%);
@@ -79,6 +75,22 @@
   --fs-app-accent: var(--fs-deck);
 }
 
+/*
+ * Documents are paper: light in every theme, so the text and highlight colors people pick look the
+ * same to everyone and when printed.
+ */
+.fs-paper {
+  color-scheme: light;
+  --fs-page: #ffffff;
+  --fs-page-text: #1d2330;
+  --fs-page-font: Arial, Helvetica, sans-serif;
+  --fs-surface-2: #f7f8fa;
+  --fs-border-strong: #c3c8d1;
+  --fs-text-muted: #5f6878;
+  --fs-focus: #2563eb;
+  --fs-find-match: rgb(250 204 21 / 45%);
+}
+
 /* Paper is always light on paper, whatever the theme on screen. */
 @media print {
   :root,
@@ -86,7 +98,9 @@
   :root[data-theme='dark'] {
     color-scheme: light;
     --fs-bg: #ffffff;
-    --fs-page: #ffffff;
+  }
+
+  .fs-paper {
     --fs-page-text: #000000;
     --fs-surface-2: #f2f2f2;
     --fs-border-strong: #808080;

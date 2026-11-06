@@ -112,6 +112,208 @@ test('undo in the title box leaves the document alone', async ({ page }) => {
   await expect(body(page)).toHaveText('Body text');
 });
 
+test('font, size, and line spacing dropdowns format the selection', async ({ page }) => {
+  await page.keyboard.type('Styled');
+  await page.keyboard.press('ControlOrMeta+A');
+
+  await page.getByRole('combobox', { name: 'Font', exact: true }).selectOption('Georgia');
+  await expect(body(page).locator('span')).toHaveCSS('font-family', /Georgia/);
+  await expect(body(page)).toBeFocused();
+  await expect(page.getByRole('combobox', { name: 'Font', exact: true })).toHaveValue(
+    'write.font-georgia',
+  );
+
+  await page.getByRole('combobox', { name: 'Font size' }).selectOption('24');
+  await expect(body(page).locator('span')).toHaveCSS('font-size', '32px');
+
+  await page.getByRole('combobox', { name: 'Line spacing' }).selectOption('2');
+  await expect(body(page).locator('p')).toHaveAttribute('style', /line-height: 2/);
+  await expect(page.getByRole('combobox', { name: 'Line spacing' })).toHaveValue(
+    'write.lineSpacing-2',
+  );
+});
+
+test('a font chosen with no selection applies to what is typed next', async ({ page }) => {
+  await page.getByRole('combobox', { name: 'Font size' }).selectOption('36');
+  await expect(body(page)).toBeFocused();
+  await page.keyboard.type('Big');
+  await expect(body(page).locator('span')).toHaveCSS('font-size', '48px');
+});
+
+test('text and highlight colors, and clearing them', async ({ page }) => {
+  await page.keyboard.type('Bright');
+  await page.keyboard.press('ControlOrMeta+A');
+
+  await button(page, 'Text color').click();
+  await page.getByRole('menuitem', { name: 'Red text' }).click();
+  await expect(body(page).locator('span')).toHaveCSS('color', 'rgb(198, 40, 40)');
+  await expect(body(page)).toBeFocused();
+
+  await button(page, 'Highlight color').click();
+  await page.getByRole('menuitem', { name: 'Yellow highlight' }).click();
+  await expect(body(page).locator('span')).toHaveCSS('background-color', 'rgb(255, 241, 118)');
+
+  await button(page, 'Text color').click();
+  await page.getByRole('menuitem', { name: 'Automatic color' }).click();
+  await expect(body(page).locator('span')).not.toHaveCSS('color', 'rgb(198, 40, 40)');
+
+  await button(page, 'Clear formatting').click();
+  await expect(body(page).locator('span')).toHaveCount(0);
+  await expect(body(page)).toHaveText('Bright');
+});
+
+test('clear formatting resets headings and spacing but keeps links', async ({ page }) => {
+  await page.keyboard.type('example.com ');
+  await page.keyboard.press('ControlOrMeta+A');
+  await format(page, 'Heading 1');
+  await button(page, 'Bold').click();
+  await page.getByRole('combobox', { name: 'Line spacing' }).selectOption('2');
+  await expect(body(page).locator('h1 strong').first()).toBeVisible();
+  await expect(body(page).locator('a')).toHaveText('example.com');
+
+  await page.keyboard.press('ControlOrMeta+\\');
+  await expect(body(page).locator('h1')).toHaveCount(0);
+  await expect(body(page).locator('strong')).toHaveCount(0);
+  await expect(body(page).locator('p').first()).not.toHaveAttribute('style', /line-height/);
+  await expect(body(page).locator('a')).toHaveText('example.com');
+});
+
+test('superscript and subscript', async ({ page }) => {
+  await page.keyboard.type('x');
+  await page.keyboard.press('ControlOrMeta+.');
+  await page.keyboard.type('2');
+  await page.keyboard.press('ControlOrMeta+.');
+  await page.keyboard.press('ControlOrMeta+,');
+  await page.keyboard.type('i');
+  await expect(body(page).locator('sup')).toHaveText('2');
+  await expect(body(page).locator('sub')).toHaveText('i');
+  await expect(button(page, 'Subscript')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('indent moves paragraphs and nests list items', async ({ page }) => {
+  await page.keyboard.type('para');
+  await format(page, 'Increase indent');
+  await expect(body(page).locator('p')).toHaveCSS('margin-left', '48px');
+  await page.keyboard.press('ControlOrMeta+[');
+  await expect(body(page).locator('p')).toHaveCSS('margin-left', '0px');
+  await expect(button(page, 'Decrease indent')).toBeDisabled();
+
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await format(page, 'Bulleted list');
+  await page.keyboard.type('one');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('two');
+  await page.keyboard.press('ControlOrMeta+]');
+  await expect(body(page).locator('ul ul li')).toHaveText('two');
+});
+
+test('links: add to a selection, edit, follow, and remove', async ({ page }) => {
+  await page.keyboard.type('Visit');
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.press('ControlOrMeta+K');
+  const dialog = page.getByRole('dialog', { name: 'Link' });
+  await dialog.getByRole('textbox').fill('example.com');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  const link = body(page).locator('a');
+  await expect(link).toHaveAttribute('href', 'https://example.com');
+  await expect(link).toHaveText('Visit');
+  await expect(body(page)).toBeFocused();
+
+  // Ctrl+click opens it; a plain click only places the cursor.
+  await page.evaluate(() => {
+    const w = window as unknown as { opened: unknown[] };
+    w.opened = [];
+    window.open = (url) => {
+      w.opened.push(url);
+      return null;
+    };
+  });
+  const opened = () => page.evaluate(() => (window as unknown as { opened: string[] }).opened);
+  await link.click();
+  expect(await opened()).toEqual([]);
+  await link.click({ modifiers: ['ControlOrMeta'] });
+  expect(await opened()).toEqual(['https://example.com']);
+
+  await page.keyboard.press('ControlOrMeta+K');
+  await expect(dialog.getByRole('textbox')).toHaveValue('https://example.com');
+  await dialog.getByRole('textbox').fill('javascript:alert(1)');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  const notice = page.getByRole('dialog', { name: 'Something went wrong' });
+  await expect(notice).toContainText(/be used as a link/);
+  await notice.getByRole('button', { name: 'OK' }).click();
+  await expect(link).toHaveAttribute('href', 'https://example.com');
+
+  await link.click();
+  await page.getByRole('tab', { name: 'Insert' }).click();
+  await button(page, 'Remove link').click();
+  await expect(link).toHaveCount(0);
+  await expect(body(page)).toHaveText('Visit');
+});
+
+test('a link with no selection inserts the address as text', async ({ page }) => {
+  await page.keyboard.press('ControlOrMeta+K');
+  const dialog = page.getByRole('dialog', { name: 'Link' });
+  await dialog.getByRole('textbox').fill('example.org');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(body(page).locator('a')).toHaveText('example.org');
+  await expect(body(page)).toBeFocused();
+  await page.keyboard.type(' after');
+  await expect(body(page).locator('a')).toHaveText('example.org');
+  await expect(body(page)).toHaveText('example.org after');
+});
+
+test('formatting is still there after a reload', async ({ page }) => {
+  await page.keyboard.type('Kept');
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.getByRole('combobox', { name: 'Font', exact: true }).selectOption('Verdana');
+  await button(page, 'Text color').click();
+  await page.getByRole('menuitem', { name: 'Blue text' }).click();
+  await format(page, 'Increase indent');
+  await expect(saved(page)).toBeVisible();
+
+  await page.reload();
+  await expect(body(page).locator('span')).toHaveCSS('color', 'rgb(21, 101, 192)');
+  await expect(body(page).locator('span')).toHaveCSS('font-family', /Verdana/);
+  await expect(body(page).locator('p')).toHaveCSS('margin-left', '48px');
+});
+
+test('colors survive .docx export and import in the browser', async ({ page }) => {
+  await page.keyboard.type('Colorful');
+  await page.keyboard.press('ControlOrMeta+A');
+  await button(page, 'Text color').click();
+  await page.getByRole('menuitem', { name: 'Green text' }).click();
+  await page.getByRole('combobox', { name: 'Font size' }).selectOption('18');
+  await page.getByRole('combobox', { name: 'Line spacing' }).selectOption('1.5');
+
+  await page.getByRole('tab', { name: 'File' }).click();
+  const downloadEvent = page.waitForEvent('download');
+  await button(page, 'Export .docx').click();
+  const path = await (await downloadEvent).path();
+
+  await button(page, 'New document').click();
+  await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue(
+    'Untitled document',
+  );
+  await page.getByRole('tab', { name: 'File' }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await button(page, 'Import .docx').click();
+  await (
+    await chooser
+  ).setFiles({ name: 'Colors.docx', mimeType: DOCX_MIME, buffer: readFileSync(path) });
+
+  await expect(body(page)).toHaveText('Colorful');
+  await expect(body(page).locator('span')).toHaveCSS('color', 'rgb(46, 125, 50)');
+  await expect(body(page).locator('span')).toHaveCSS('font-size', '24px');
+  await expect(body(page).locator('p')).toHaveAttribute('style', /line-height: 1\.5/);
+});
+
+test('the page stays white in the dark theme, so colors stay readable', async ({ page }) => {
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.fs-paper')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+});
+
 test('find and replace', async ({ page }) => {
   await page.keyboard.type('cat dog cat');
 

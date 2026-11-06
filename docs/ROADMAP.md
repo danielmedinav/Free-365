@@ -20,9 +20,12 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done
 Headings, bold/italic/underline, lists, tables, images, alignment, find/replace, paper-style
 page view, undo/redo, autosave, .docx export and import (mammoth), PDF via print.
 
-Known gaps, for later: the page view is one continuous sheet (no on-screen page breaks), .docx
-import replaces the open document (no import from the home screen), and links can be typed or
-imported but have no ribbon command yet.
+Also added: fonts, sizes, text and highlight colors, line spacing, indents, links,
+superscript/subscript, and clear formatting.
+
+Known gaps, for later: the page view is one continuous sheet (no on-screen page breaks), and .docx
+import replaces the open document (no import from the home screen). Import reads formatting set
+directly on text and paragraphs, but not formatting inherited from named styles or themes.
 
 ## Milestone 2: FreeGrid MVP ⬜
 

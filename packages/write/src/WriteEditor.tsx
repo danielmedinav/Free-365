@@ -5,6 +5,7 @@ import {
   Button,
   ConfirmDialog,
   DialogFrame,
+  PromptDialog,
   useRegisterCommands,
   useRegistry,
   type EditorAppProps,
@@ -20,6 +21,7 @@ import { WRITE_SCHEMA_VERSION, type WriteData } from './content';
 import { writeDraft } from './draft';
 import { writeExtensions } from './extensions';
 import { FindBar } from './FindBar';
+import { normalizeLink } from './formatting';
 import {
   IMAGE_FILE_TYPE,
   ImageRejectedError,
@@ -50,6 +52,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
   const registry = useRegistry();
   const [find, setFind] = useState<{ mode: 'find' | 'replace'; focusKey: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [linkDraft, setLinkDraft] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<{ doc: JSONContent; title: string } | null>(
     null,
   );
@@ -68,6 +71,13 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': 'Document body',
+      },
+      handleClick(_view, _pos, event) {
+        if (!event.ctrlKey && !event.metaKey) return false;
+        const href = (event.target as HTMLElement).closest('a')?.getAttribute('href');
+        if (!href) return false;
+        window.open(href, '_blank', 'noopener,noreferrer');
+        return true;
       },
       handlePaste(view, event) {
         const files = imageFilesIn(event.clipboardData);
@@ -141,6 +151,29 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
     if (meta.title === APPS.write.defaultTitle) shell.onTitleChange?.(title);
   };
 
+  const applyLink = (input: string) => {
+    if (!input.trim()) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    const href = normalizeLink(input);
+    if (!href) {
+      setNotice(`“${input}” can't be used as a link. Try an address like example.com.`);
+      return;
+    }
+    if (editor.state.selection.empty && !editor.isActive('link')) {
+      const link = { type: 'link', attrs: { href } };
+      editor
+        .chain()
+        .focus()
+        .insertContent({ type: 'text', text: input.trim(), marks: [link] })
+        .unsetMark('link')
+        .run();
+    } else {
+      editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
+    }
+  };
+
   useRegisterCommands(
     createWriteCommands(editor, {
       openFind(mode) {
@@ -155,6 +188,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
       },
       isFindOpen: () => find !== null,
       save: () => autosaver.flush(),
+      editLink: () => setLinkDraft(String(editor.getAttributes('link').href ?? '')),
       async insertImage() {
         const [file] = await pickFiles([IMAGE_FILE_TYPE]);
         if (!file) return;
@@ -196,7 +230,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
   return (
     <AppShell
       {...shell}
-      ribbon={buildWriteRibbon(fileTab)}
+      ribbon={buildWriteRibbon(fileTab, editor)}
       status={{
         left: (
           <>
@@ -209,8 +243,20 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
     >
       {find && <FindBar editor={editor} mode={find.mode} focusKey={find.focusKey} />}
       <div className={styles.desk}>
-        <EditorContent editor={editor} className={styles.page} />
+        <EditorContent editor={editor} className={`${styles.page} fs-paper`} />
       </div>
+      <PromptDialog
+        open={linkDraft !== null}
+        onOpenChange={(open) => {
+          if (!open) setLinkDraft(null);
+        }}
+        title="Link"
+        description="Leave this empty to remove the link."
+        label="Web or email address"
+        initialValue={linkDraft ?? ''}
+        confirmLabel="Save"
+        onSubmit={applyLink}
+      />
       <ConfirmDialog
         open={pendingImport !== null}
         onOpenChange={(open) => {

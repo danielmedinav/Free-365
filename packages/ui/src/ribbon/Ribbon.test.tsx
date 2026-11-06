@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { Bold, Save } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
 import { CommandProvider } from '../commands/CommandProvider';
+import { ColorMenu } from './ColorMenu';
+import { CommandSelect } from './CommandSelect';
 import { Ribbon } from './Ribbon';
 import type { RibbonTab } from './types';
 
@@ -70,5 +72,77 @@ describe('Ribbon', () => {
   it('hides buttons for unregistered commands', () => {
     renderRibbon(createCommandRegistry());
     expect(screen.queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument();
+  });
+});
+
+describe('CommandSelect', () => {
+  function setup(active: string | null) {
+    const registry = createCommandRegistry();
+    const run = vi.fn();
+    registry.register(
+      ['a', 'b'].map((id) => ({
+        id,
+        label: id,
+        run: () => run(id),
+        isActive: () => active === id,
+      })),
+    );
+    render(
+      <CommandProvider registry={registry}>
+        <CommandSelect
+          label="Choice"
+          currentLabel={() => 'Other value'}
+          options={[
+            { command: 'a', label: 'Option A' },
+            { command: 'b', label: 'Option B' },
+          ]}
+        />
+      </CommandProvider>,
+    );
+    return { run, select: screen.getByRole('combobox', { name: 'Choice' }) };
+  }
+
+  it('shows the active command and runs the chosen one', async () => {
+    const { run, select } = setup('a');
+    expect(select).toHaveValue('a');
+    expect(screen.queryByRole('option', { name: 'Other value' })).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(select, 'Option B');
+    expect(run).toHaveBeenCalledWith('b');
+  });
+
+  it('shows the current value when no option matches it', () => {
+    const { select } = setup(null);
+    expect(select).toHaveDisplayValue('Other value');
+  });
+});
+
+describe('ColorMenu', () => {
+  it('runs the chosen swatch or the clear command', async () => {
+    const registry = createCommandRegistry();
+    const run = vi.fn();
+    registry.register([
+      { id: 'clear', label: 'No color', run: () => run('clear') },
+      { id: 'red', label: 'Red', run: () => run('red') },
+    ]);
+    render(
+      <CommandProvider registry={registry}>
+        <ColorMenu
+          label="Color"
+          icon={Bold}
+          clearCommand="clear"
+          current={() => undefined}
+          swatches={[{ command: 'red', color: '#ff0000' }]}
+        />
+      </CommandProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Color' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Red' }));
+    expect(run).toHaveBeenCalledWith('red');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Color' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'No color' }));
+    expect(run).toHaveBeenCalledWith('clear');
   });
 });

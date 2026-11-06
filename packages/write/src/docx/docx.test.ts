@@ -1,7 +1,17 @@
 import { getSchema, type JSONContent } from '@tiptap/core';
 import { Node as PmNode } from '@tiptap/pm/model';
+import {
+  AlignmentType,
+  Document,
+  HeadingLevel,
+  LineRuleType,
+  Packer,
+  Paragraph,
+  TextRun,
+} from 'docx';
 import { describe, expect, it } from 'vitest';
 import { writeExtensions } from '../extensions';
+import { primaryFont, toHexColor } from '../formatting';
 import { exportDocx } from './exportDocx';
 import { readImageSize } from './imageSize';
 import { importDocx } from './importDocx';
@@ -202,6 +212,118 @@ describe('.docx round trip', () => {
     expect(end?.content?.[0]?.text).toBe('end');
   });
 
+  it('keeps fonts, sizes, text colors, and highlights', async () => {
+    const styled = (value: string, attrs: object): JSONContent => ({
+      type: 'text',
+      text: value,
+      marks: [{ type: 'textStyle', attrs }],
+    });
+    const result = await roundTrip(
+      doc(
+        para(
+          text('plain '),
+          styled('font', { fontFamily: 'Times New Roman' }),
+          text(' '),
+          styled('size', { fontSize: '18pt' }),
+          text(' '),
+          styled('color', { color: '#c62828' }),
+          text(' '),
+          styled('mark', { backgroundColor: '#fff176' }),
+          text(' '),
+          styled('all', { fontFamily: 'Georgia', fontSize: '9pt', color: '#1565c0' }),
+        ),
+      ),
+    );
+    const runs = blocks(result)[0]?.content ?? [];
+    const attrs = (value: string) =>
+      runs.find((r) => r.text === value)?.marks?.find((m) => m.type === 'textStyle')?.attrs;
+
+    expect(primaryFont(attrs('font')?.fontFamily)).toBe('Times New Roman');
+    expect(attrs('size')?.fontSize).toBe('18pt');
+    expect(toHexColor(attrs('color')?.color)).toBe('#c62828');
+    expect(toHexColor(attrs('mark')?.backgroundColor)).toBe('#fff176');
+    expect(primaryFont(attrs('all')?.fontFamily)).toBe('Georgia');
+    expect(attrs('all')?.fontSize).toBe('9pt');
+    expect(toHexColor(attrs('all')?.color)).toBe('#1565c0');
+    expect(attrs('plain ')).toBeUndefined();
+  });
+
+  it('keeps superscript and subscript', async () => {
+    const result = await roundTrip(
+      doc(para(text('E=mc'), text('2', 'superscript'), text(' H'), text('2', 'subscript'))),
+    );
+    const marks = (blocks(result)[0]?.content ?? []).map((r) => r.marks?.[0]?.type);
+    expect(marks).toEqual([undefined, 'superscript', undefined, 'subscript']);
+  });
+
+  it('keeps line spacing and indents', async () => {
+    const result = await roundTrip(
+      doc(
+        { type: 'paragraph', attrs: { lineSpacing: 2 }, content: [text('double')] },
+        { type: 'paragraph', attrs: { lineSpacing: 1.15 }, content: [text('tight')] },
+        { type: 'paragraph', attrs: { indent: 3 }, content: [text('indented')] },
+        { type: 'heading', attrs: { level: 2, lineSpacing: 1.5 }, content: [text('head')] },
+        para(text('plain')),
+      ),
+    );
+    expect(blocks(result).map((b) => [b.attrs?.lineSpacing, b.attrs?.indent])).toEqual([
+      [2, 0],
+      [1.15, 0],
+      [null, 3],
+      [1.5, 0],
+      [null, 0],
+    ]);
+  });
+
+  it('keeps formatting inside links, bold text, and tables', async () => {
+    const color = { type: 'textStyle', attrs: { color: '#c62828' } };
+    const result = await roundTrip(
+      doc(
+        para({
+          type: 'text',
+          text: 'site',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com/' } }, color],
+        }),
+        para({ type: 'text', text: 'loud', marks: [{ type: 'bold' }, color] }),
+        {
+          type: 'table',
+          content: [
+            {
+              type: 'tableRow',
+              content: [
+                {
+                  type: 'tableCell',
+                  attrs: { colspan: 1, rowspan: 1 },
+                  content: [para({ type: 'text', text: 'cell', marks: [color] })],
+                },
+              ],
+            },
+          ],
+        },
+      ),
+    );
+    expect(JSON.stringify(result)).toContain('https://example.com/');
+    const find = (node: JSONContent, value: string): JSONContent | undefined =>
+      node.text === value ? node : node.content?.map((c) => find(c, value)).find(Boolean);
+    for (const value of ['site', 'loud', 'cell']) {
+      const style = find(result, value)?.marks?.find((m) => m.type === 'textStyle');
+      expect(toHexColor(style?.attrs?.color)).toBe('#c62828');
+    }
+    expect(find(result, 'loud')?.marks?.map((m) => m.type)).toContain('bold');
+  });
+
+  it('leaves no marker characters behind, even in empty paragraphs', async () => {
+    const result = await roundTrip(
+      doc(
+        { type: 'paragraph', attrs: { textAlign: 'center' } },
+        { type: 'paragraph', attrs: { lineSpacing: 2 }, content: [text('x')] },
+      ),
+    );
+    expect(JSON.stringify(result)).not.toMatch(/[-]/);
+    expect(blocks(result)[0]?.attrs?.textAlign).toBe('center');
+    expect(blocks(result)[0]?.content).toBeUndefined();
+  });
+
   it('handles an empty document', async () => {
     const result = await roundTrip(doc());
     expect(result.type).toBe('doc');
@@ -282,5 +404,51 @@ describe('readImageSize', () => {
   it('returns undefined for unknown or truncated data', () => {
     expect(readImageSize(bytes(1, 2, 3))).toBeUndefined();
     expect(readImageSize(bytes(0x89, 0x50, 0x4e, 0x47))).toBeUndefined();
+  });
+});
+
+describe('importDocx with files from other programs', () => {
+  async function fromParagraphs(children: Paragraph[]): Promise<JSONContent> {
+    const blob = await Packer.toBlob(new Document({ sections: [{ children }] }));
+    return importDocx(await blob.arrayBuffer());
+  }
+
+  it('reads named highlight colors', async () => {
+    const result = await fromParagraphs([
+      new Paragraph({ children: [new TextRun({ text: 'lit', highlight: 'yellow' })] }),
+    ]);
+    const style = blocks(result)[0]?.content?.[0]?.marks?.[0];
+    expect(toHexColor(style?.attrs?.backgroundColor)).toBe('#ffff00');
+  });
+
+  it('ignores automatic colors and fixed line heights', async () => {
+    const result = await fromParagraphs([
+      new Paragraph({
+        spacing: { line: 300, lineRule: LineRuleType.EXACT },
+        children: [new TextRun({ text: 'a', color: 'auto' })],
+      }),
+    ]);
+    expect(blocks(result)[0]?.attrs?.lineSpacing).toBeNull();
+    expect(blocks(result)[0]?.content?.[0]?.marks).toBeUndefined();
+  });
+
+  it('keeps a centered title as a heading', async () => {
+    const result = await fromParagraphs([
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun('Title')],
+      }),
+    ]);
+    expect(blocks(result)[0]?.type).toBe('heading');
+    expect(blocks(result)[0]?.attrs?.textAlign).toBe('center');
+  });
+
+  it('keeps a font name with odd characters from breaking the document', async () => {
+    const result = await fromParagraphs([
+      new Paragraph({ children: [new TextRun({ text: 'odd', font: 'A"; color: red; x:"' })] }),
+    ]);
+    expect(blocks(result)[0]?.content?.[0]?.text).toBe('odd');
+    expect(JSON.stringify(result)).not.toContain('color":"red');
   });
 });

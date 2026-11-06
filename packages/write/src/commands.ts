@@ -1,6 +1,16 @@
 import { createUndoCommands, type Command } from '@free360/commands';
 import type { ChainedCommands, Editor } from '@tiptap/core';
 import { findReplaceKey } from './findReplace';
+import {
+  FONT_FAMILIES,
+  FONT_SIZES,
+  HIGHLIGHT_COLORS,
+  LINE_SPACINGS,
+  primaryFont,
+  slug,
+  TEXT_COLORS,
+  toHexColor,
+} from './formatting';
 import { createEditorUndoStack } from './undoStack';
 
 export type WriteActions = {
@@ -9,6 +19,7 @@ export type WriteActions = {
   isFindOpen: () => boolean;
   save: () => void | Promise<unknown>;
   insertImage: () => void | Promise<unknown>;
+  editLink: () => void;
   importDocx: () => void | Promise<unknown>;
   exportDocx: () => void | Promise<unknown>;
   print: () => void;
@@ -50,6 +61,20 @@ const TOGGLES: ToggleSpec[] = [
     shortcut: 'Mod+Shift+S',
     apply: (c) => c.toggleStrike(),
     active: ['strike'],
+  },
+  {
+    id: 'write.superscript',
+    label: 'Superscript',
+    shortcut: 'Mod+.',
+    apply: (c) => c.toggleSuperscript(),
+    active: ['superscript'],
+  },
+  {
+    id: 'write.subscript',
+    label: 'Subscript',
+    shortcut: 'Mod+,',
+    apply: (c) => c.toggleSubscript(),
+    active: ['subscript'],
   },
   {
     id: 'write.paragraph',
@@ -102,6 +127,18 @@ const TABLE_ACTIONS: TableAction[] = [
   { id: 'write.deleteTable', label: 'Delete table', apply: (c) => c.deleteTable() },
 ];
 
+/** Removed by Clear formatting. Links stay: they're content as much as appearance. */
+const CLEARED_MARKS = [
+  'bold',
+  'code',
+  'italic',
+  'strike',
+  'subscript',
+  'superscript',
+  'textStyle',
+  'underline',
+];
+
 function hasMatches(editor: Editor): boolean {
   return !!findReplaceKey.getState(editor.state)?.matches.length;
 }
@@ -142,6 +179,67 @@ export function createWriteCommands(editor: Editor, actions: WriteActions): Comm
           ? !ALIGNMENTS.some((a) => a.value !== 'left' && editor.isActive({ textAlign: a.value }))
           : editor.isActive({ textAlign: value }),
     })),
+
+    ...createTextStyleCommands(editor, run, can),
+
+    {
+      id: 'write.indent',
+      label: 'Increase indent',
+      shortcut: 'Mod+]',
+      allowInInputs: true,
+      run: run((c) => c.indent()),
+      isEnabled: can((c) => c.indent()),
+    },
+    {
+      id: 'write.outdent',
+      label: 'Decrease indent',
+      shortcut: 'Mod+[',
+      allowInInputs: true,
+      run: run((c) => c.outdent()),
+      isEnabled: can((c) => c.outdent()),
+    },
+    {
+      id: 'write.lineSpacing-default',
+      label: 'Default',
+      run: run((c) => c.unsetLineSpacing()),
+      isActive: () => !editor.getAttributes(currentBlockType(editor)).lineSpacing,
+    },
+    ...LINE_SPACINGS.map((spacing): Command => ({
+      id: `write.lineSpacing-${slug(spacing)}`,
+      label: String(spacing),
+      run: run((c) => c.setLineSpacing(spacing)),
+      isActive: () => editor.getAttributes(currentBlockType(editor)).lineSpacing === spacing,
+    })),
+    {
+      id: 'write.clearFormatting',
+      label: 'Clear formatting',
+      description: 'Back to plain text: removes fonts, colors, headings, lists, and spacing',
+      shortcut: 'Mod+\\',
+      allowInInputs: true,
+      run: run((c) =>
+        CLEARED_MARKS.reduce((chain, mark) => chain.unsetMark(mark), c)
+          .clearNodes()
+          .unsetTextAlign()
+          .unsetLineSpacing()
+          .unsetIndent(),
+      ),
+    },
+
+    {
+      id: 'write.link',
+      label: 'Link',
+      description: 'Add or edit a link. Ctrl+click a link to open it.',
+      shortcut: 'Mod+K',
+      allowInInputs: true,
+      run: actions.editLink,
+      isActive: () => editor.isActive('link'),
+    },
+    {
+      id: 'write.unlink',
+      label: 'Remove link',
+      run: run((c) => c.extendMarkRange('link').unsetLink()),
+      isEnabled: () => editor.isActive('link'),
+    },
 
     {
       id: 'write.insertTable',
@@ -252,5 +350,75 @@ export function createWriteCommands(editor: Editor, actions: WriteActions): Comm
       allowInInputs: true,
       run: actions.print,
     },
+  ];
+}
+
+function currentBlockType(editor: Editor): string {
+  return editor.isActive('heading') ? 'heading' : 'paragraph';
+}
+
+type ChainStep = (apply: (chain: ChainedCommands) => ChainedCommands) => () => void;
+type ChainCheck = (apply: (chain: ChainedCommands) => ChainedCommands) => () => boolean;
+
+/** One command per font, size, and color, so menus can list them like any other action. */
+function createTextStyleCommands(editor: Editor, run: ChainStep, can: ChainCheck): Command[] {
+  const style = (name: string): unknown => editor.getAttributes('textStyle')[name];
+  const canStyle = can((c) => c.setColor('#000000'));
+
+  return [
+    {
+      id: 'write.font-default',
+      label: 'Default',
+      run: run((c) => c.unsetFontFamily()),
+      isEnabled: canStyle,
+      isActive: () => !style('fontFamily'),
+    },
+    ...FONT_FAMILIES.map((font): Command => ({
+      id: `write.font-${slug(font)}`,
+      label: font,
+      run: run((c) => c.setFontFamily(font)),
+      isEnabled: canStyle,
+      isActive: () => primaryFont(style('fontFamily')) === font,
+    })),
+    {
+      id: 'write.size-default',
+      label: 'Default',
+      run: run((c) => c.unsetFontSize()),
+      isEnabled: canStyle,
+      isActive: () => !style('fontSize'),
+    },
+    ...FONT_SIZES.map((size): Command => ({
+      id: `write.size-${size}`,
+      label: String(size),
+      run: run((c) => c.setFontSize(`${size}pt`)),
+      isEnabled: canStyle,
+      isActive: () => style('fontSize') === `${size}pt`,
+    })),
+    {
+      id: 'write.textColor-default',
+      label: 'Automatic color',
+      run: run((c) => c.unsetColor()),
+      isEnabled: canStyle,
+    },
+    ...TEXT_COLORS.map(({ name, hex }): Command => ({
+      id: `write.textColor-${slug(name)}`,
+      label: `${name} text`,
+      run: run((c) => c.setColor(hex)),
+      isEnabled: canStyle,
+      isActive: () => toHexColor(style('color')) === hex,
+    })),
+    {
+      id: 'write.highlight-default',
+      label: 'No highlight',
+      run: run((c) => c.unsetBackgroundColor()),
+      isEnabled: canStyle,
+    },
+    ...HIGHLIGHT_COLORS.map(({ name, hex }): Command => ({
+      id: `write.highlight-${slug(name)}`,
+      label: `${name} highlight`,
+      run: run((c) => c.setBackgroundColor(hex)),
+      isEnabled: canStyle,
+      isActive: () => toHexColor(style('backgroundColor')) === hex,
+    })),
   ];
 }

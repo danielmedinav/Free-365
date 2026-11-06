@@ -15,8 +15,9 @@
 .page :global(.tiptap) {
   min-height: 1056px;
   padding: 96px;
-  font-size: 15px;
-  line-height: 1.5;
+  font-family: var(--fs-page-font);
+  font-size: 11pt;
+  line-height: 1.15;
   overflow-wrap: break-word;
 }
 
@@ -29,7 +30,7 @@
 }
 
 .page :global(.tiptap p) {
-  margin: 0 0 0.6em;
+  margin: 0 0 6pt;
 }
 
 .page :global(.tiptap h1) {
