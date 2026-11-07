@@ -29,7 +29,13 @@ and footers, and page numbers, all kept in .docx export and import and matched w
 Images and tables: drag or button resizing, image position and text wrap, column resizing, merged
 cells, and cell colors, all kept in .docx export and import.
 
-Known gaps, for later: .docx import replaces the open document (no import from the home screen),
+References: live table of contents, footnotes at the bottom of their page, column sections, a symbol
+picker, and a switch for the browser's spell checker, all but the last two kept in .docx export and
+import.
+
+Known gaps, for later: footnotes are plain text, and an exported table of contents is a snapshot of
+FreeWrite's page numbers rather than a field other programs update. A column section can't split
+across pages, so one taller than a page runs across the gap. .docx import replaces the open document (no import from the home screen),
 and reads formatting set directly on text and paragraphs, but not formatting inherited from named
 styles or themes. Headers and footers are one plain line, the same on every page. A table row taller
 than a page runs across the gap, a cell merged across rows that a page break falls between runs

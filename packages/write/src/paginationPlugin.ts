@@ -3,7 +3,7 @@ import type { Node as PmNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { readPageSetup, PX_PER_INCH } from './pageSetup';
-import { computeBreaks, type PageUnit } from './pagination';
+import { computeBreaks, type PageNote, type PageUnit } from './pagination';
 
 /** Spacer height in pixels, not counting the on-screen gap between sheets. */
 type PageGap = { positions: number[]; height: number };
@@ -13,6 +13,13 @@ type PaginationState = { gaps: PageGap[]; decorations: DecorationSet };
 export const paginationKey = new PluginKey<PaginationState>('fsPagination');
 
 const MEASURING_CLASS = 'fs-measuring';
+/** Room for the rule above a page's footnotes; matches the footnote area's styles. */
+const NOTE_AREA_PADDING = 14;
+
+/** Which page a document position is on, counting from 1. */
+export function pageOfPosition(gaps: { positions: number[] }[], pos: number): number {
+  return gaps.filter((gap) => (gap.positions[0] ?? 0) <= pos).length + 1;
+}
 
 function createSpacer(height: number, betweenRows: boolean): HTMLElement {
   // The sheet gap is a CSS variable because it disappears when printing.
@@ -66,20 +73,64 @@ function firstLineSplit(view: EditorView, start: number, end: number) {
   };
 }
 
-function collectUnits(view: EditorView): PageUnit[] {
+/** Measures footnote text as the footnote area will show it, by rendering it off-screen. */
+function createNoteMeasurer(view: EditorView, widthPx: number) {
+  const heights = new Map<string, number>();
+  let element: HTMLElement | undefined;
+
+  return {
+    heightOf(text: string): number {
+      const known = heights.get(text);
+      if (known !== undefined) return known;
+      if (!element) {
+        element = document.createElement('div');
+        element.className = 'fs-footnote-line';
+        element.style.cssText = `position:absolute;visibility:hidden;width:${widthPx}px`;
+        view.dom.parentElement?.append(element);
+      }
+      element.textContent = `00. ${text}`;
+      const height = element.getBoundingClientRect().height;
+      heights.set(text, height);
+      return height;
+    },
+    remove: () => element?.remove(),
+  };
+}
+
+function collectUnits(view: EditorView, noteHeight: (text: string) => number): PageUnit[] {
   const units: PageUnit[] = [];
   let afterManualBreak = false;
 
-  const add = (element: Node | null, positions: number[], splitAt?: PageUnit['splitAt']) => {
+  const notesIn = (node: PmNode, pos: number): PageNote[] => {
+    const notes: PageNote[] = [];
+    node.descendants((child, offset) => {
+      if (child.type.name === 'footnote') {
+        const { top } = view.coordsAtPos(pos + 1 + offset, 1);
+        notes.push({ top, height: noteHeight(String(child.attrs.text ?? '')) });
+      }
+    });
+    return notes;
+  };
+
+  const add = (node: PmNode, pos: number, positions: number[], splitAt?: PageUnit['splitAt']) => {
+    const element = view.nodeDOM(pos);
     if (!(element instanceof HTMLElement)) return;
     const { top, bottom } = element.getBoundingClientRect();
-    units.push({ top, bottom, positions, splitAt, forceBreakBefore: afterManualBreak });
+    units.push({
+      top,
+      bottom,
+      positions,
+      splitAt,
+      forceBreakBefore: afterManualBreak,
+      notes: notesIn(node, pos),
+    });
     afterManualBreak = false;
   };
 
   view.state.doc.descendants((node, pos, parent, index) => {
-    if (node.type.name === 'tableRow') {
-      add(view.nodeDOM(pos), [pos]);
+    // Kept whole: a row can't split, and text in columns has no single top-to-bottom order.
+    if (node.type.name === 'tableRow' || node.type.name === 'columnSection') {
+      add(node, pos, [pos]);
       return false;
     }
     if (node.isTextblock) {
@@ -87,11 +138,11 @@ function collectUnits(view: EditorView): PageUnit[] {
       const firstInItem = parent?.type.name === 'listItem' && index === 0;
       const start = pos + 1;
       const end = pos + node.nodeSize - 1;
-      add(view.nodeDOM(pos), [firstInItem ? pos - 1 : start], firstLineSplit(view, start, end));
+      add(node, pos, [firstInItem ? pos - 1 : start], firstLineSplit(view, start, end));
       return false;
     }
     if (node.isBlock && node.isLeaf) {
-      add(view.nodeDOM(pos), [pos]);
+      add(node, pos, [pos]);
       if (node.type.name === 'pageBreak') afterManualBreak = true;
     }
     return true;
@@ -103,12 +154,16 @@ function measure(view: EditorView): PageGap[] {
   const setup = readPageSetup(view.state.doc.attrs.pageSetup);
   const marginsPx = (setup.marginTopIn + setup.marginBottomIn) * PX_PER_INCH;
   const pageHeight = setup.heightIn * PX_PER_INCH - marginsPx;
+  const contentWidth = (setup.widthIn - setup.marginLeftIn - setup.marginRightIn) * PX_PER_INCH;
 
   // Measure the text as if there were no spacers. The class sits outside the editable area, so
   // ProseMirror doesn't see a change, and the browser paints nothing until this is done.
   const host = view.dom.parentElement;
   host?.classList.add(MEASURING_CLASS);
-  const breaks = computeBreaks(collectUnits(view), pageHeight);
+  const measurer = createNoteMeasurer(view, contentWidth);
+  const units = collectUnits(view, measurer.heightOf);
+  const breaks = computeBreaks(units, pageHeight, NOTE_AREA_PADDING);
+  measurer.remove();
   host?.classList.remove(MEASURING_CLASS);
 
   return breaks.map(({ positions, blank }) => ({

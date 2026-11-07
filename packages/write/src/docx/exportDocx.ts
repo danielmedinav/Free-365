@@ -5,21 +5,25 @@ import {
   Document,
   ExternalHyperlink,
   Footer,
+  FootnoteReferenceRun,
   Header,
   HeadingLevel,
   HorizontalPositionAlign,
   HorizontalPositionRelativeFrom,
   ImageRun,
+  LeaderType,
   LevelFormat,
   PageBreak,
   PageNumber,
   PageOrientation,
   Packer,
   Paragraph,
+  SectionType,
   ShadingType,
   Table,
   TableCell,
   TableRow,
+  Tab,
   TabStopType,
   TextRun,
   TextWrappingSide,
@@ -34,7 +38,14 @@ import { isLandscape, PX_PER_INCH, readPageSetup, type PageSetup } from '../page
 import { readImageLayout, type ImageLayout } from '../imageExtension';
 import { tableColumnWidths } from '../tableFormat';
 import { readImageSize } from './imageSize';
-import { CODE_BLOCK_STYLE, DIVIDER_STYLE, INLINE_CODE_STYLE, QUOTE_STYLE } from './styleNames';
+import {
+  CODE_BLOCK_STYLE,
+  DIVIDER_STYLE,
+  INLINE_CODE_STYLE,
+  QUOTE_STYLE,
+  TOC_HEADING_STYLE,
+  tocStyleName,
+} from './styleNames';
 
 const ORDERED_LIST = 'fs-ordered';
 const MAX_LIST_LEVEL = 8;
@@ -44,6 +55,8 @@ const SINGLE_LINE = 240;
 /** Matches the editor's default look, so documents keep their shape in other programs. */
 const DEFAULT_LINE_SPACING = 1.15;
 const DEFAULT_PARAGRAPH_GAP_TWIPS = 120;
+const COLUMN_GAP_TWIPS = 720;
+const TOC_LEVELS = 3;
 
 const HEADINGS = [
   HeadingLevel.HEADING_1,
@@ -122,10 +135,17 @@ function textRun(node: JSONContent): ParagraphChild {
     : run;
 }
 
-function inlineChildren(nodes: JSONContent[] | undefined): ParagraphChild[] {
-  return (nodes ?? []).map((node) =>
-    node.type === 'hardBreak' ? new TextRun({ break: 1 }) : textRun(node),
-  );
+function inlineChildren(
+  nodes: JSONContent[] | undefined,
+  addFootnote: (text: string) => number,
+): ParagraphChild[] {
+  return (nodes ?? []).map((node) => {
+    if (node.type === 'hardBreak') return new TextRun({ break: 1 });
+    if (node.type === 'footnote') {
+      return new FootnoteReferenceRun(addFootnote(String(node.attrs?.text ?? '')));
+    }
+    return textRun(node);
+  });
 }
 
 /** The paragraph-level settings shared by paragraphs and headings. */
@@ -271,7 +291,12 @@ function tableBlock(node: JSONContent, convertBlocks: BlockConverter, widthTwips
 
 type BlockConverter = (nodes: JSONContent[], context: BlockContext) => Block[];
 
-function createBlockConverter(setup: PageSetup): BlockConverter {
+type ConverterExtras = {
+  addFootnote: (text: string) => number;
+  tableOfContents: () => Paragraph[];
+};
+
+function createBlockConverter(setup: PageSetup, extras: ConverterExtras): BlockConverter {
   const contentWidth = contentWidthInches(setup);
 
   // Each numbered list gets its own instance, so its numbering restarts at 1.
@@ -310,7 +335,7 @@ function createBlockConverter(setup: PageSetup): BlockConverter {
           return [
             new Paragraph({
               ...blockFormat(node, context),
-              children: [...images, ...inlineChildren(node.content)],
+              children: [...images, ...inlineChildren(node.content, extras.addFootnote)],
             }),
           ];
         }
@@ -319,7 +344,7 @@ function createBlockConverter(setup: PageSetup): BlockConverter {
             new Paragraph({
               ...blockFormat(node, context),
               heading: HEADINGS[Number(node.attrs?.level ?? 1) - 1],
-              children: inlineChildren(node.content),
+              children: inlineChildren(node.content, extras.addFootnote),
             }),
           ];
         case 'bulletList':
@@ -351,6 +376,8 @@ function createBlockConverter(setup: PageSetup): BlockConverter {
         }
         case 'table':
           return [tableBlock(node, convert, twips(contentWidth))];
+        case 'tableOfContents':
+          return extras.tableOfContents();
         case 'pageBreak':
           return [new Paragraph({ children: [new PageBreak()] })];
         default:
@@ -384,7 +411,7 @@ function zoneParagraph(setup: PageSetup, text: string, withNumber: boolean): Par
     tabStops: [{ type: TabStopType.RIGHT, position: twips(contentWidthInches(setup)) }],
     children: [
       new TextRun({ text, size: 18 }),
-      ...(withNumber ? [new TextRun({ children: ['\t', PageNumber.CURRENT], size: 18 })] : []),
+      ...(withNumber ? [new TextRun({ children: [new Tab(), PageNumber.CURRENT], size: 18 })] : []),
     ],
   });
 }
@@ -418,16 +445,94 @@ function sectionOptions(setup: PageSetup) {
   };
 }
 
+function plainText(node: JSONContent): string {
+  return node.text ?? (node.content ?? []).map(plainText).join('');
+}
+
+function headingsIn(node: JSONContent): JSONContent[] {
+  if (node.type === 'heading') return plainText(node).trim() ? [node] : [];
+  return (node.content ?? []).flatMap(headingsIn);
+}
+
+/**
+ * Written out as ordinary text, rather than a field the reader has to update: every program then
+ * shows it straight away. The numbers are the ones FreeWrite had when this was exported.
+ */
+function tableOfContentsParagraphs(
+  doc: JSONContent,
+  setup: PageSetup,
+  pages: number[] | undefined,
+): Paragraph[] {
+  const position = twips(contentWidthInches(setup));
+  return [
+    new Paragraph({ style: 'TOCHeading', children: [new TextRun('Contents')] }),
+    ...headingsIn(doc).map((heading, index) => {
+      const level = Math.min(Number(heading.attrs?.level ?? 1), TOC_LEVELS);
+      const page = pages?.[index];
+      return new Paragraph({
+        style: `TOC${level}`,
+        tabStops: [{ type: TabStopType.RIGHT, position, leader: LeaderType.DOT }],
+        children: [
+          new TextRun(plainText(heading)),
+          ...(page === undefined ? [] : [new TextRun({ children: [new Tab(), String(page)] })]),
+        ],
+      });
+    }),
+  ];
+}
+
 /** Converts a FreeWrite document to a .docx file. */
-export async function exportDocx(doc: JSONContent, title?: string): Promise<Blob> {
+export async function exportDocx(
+  doc: JSONContent,
+  title?: string,
+  headingPageNumbers?: number[],
+): Promise<Blob> {
   const setup = readPageSetup(doc.attrs?.pageSetup);
-  const convert = createBlockConverter(setup);
-  const children = convert(doc.content ?? [], { listLevel: -1, paragraph: {} });
+  const footnotes: Record<number, { children: Paragraph[] }> = {};
+  let footnoteCount = 0;
+  const convert = createBlockConverter(setup, {
+    addFootnote(text) {
+      footnoteCount++;
+      footnotes[footnoteCount] = { children: [new Paragraph(text)] };
+      return footnoteCount;
+    },
+    tableOfContents: () => tableOfContentsParagraphs(doc, setup, headingPageNumbers),
+  });
+
+  // Each run of ordinary blocks or column section becomes a section of the file.
+  const groups: { columns: number; blocks: JSONContent[] }[] = [];
+  for (const node of doc.content ?? []) {
+    if (node.type === 'columnSection') {
+      groups.push({ columns: Number(node.attrs?.count ?? 2), blocks: node.content ?? [] });
+    } else if (groups[groups.length - 1]?.columns === 1) {
+      groups[groups.length - 1]!.blocks.push(node);
+    } else {
+      groups.push({ columns: 1, blocks: [node] });
+    }
+  }
+  if (!groups.length) groups.push({ columns: 1, blocks: [] });
+
+  const sections = groups.map(({ columns, blocks }, index) => {
+    const options = sectionOptions(setup);
+    const children = convert(blocks, { listLevel: -1, paragraph: {} });
+    return {
+      ...options,
+      properties: {
+        ...options.properties,
+        ...(index > 0 ? { type: SectionType.CONTINUOUS } : {}),
+        ...(columns > 1
+          ? { column: { count: columns, space: COLUMN_GAP_TWIPS, equalWidth: true } }
+          : {}),
+      },
+      children: children.length ? children : [new Paragraph({})],
+    };
+  });
 
   const file = new Document({
     title,
     creator: 'Free 360',
     numbering: { config: [{ reference: ORDERED_LIST, levels: orderedListLevels() }] },
+    footnotes,
     styles: {
       default: {
         document: {
@@ -449,6 +554,18 @@ export async function exportDocx(doc: JSONContent, title?: string): Promise<Blob
           paragraph: { indent: { left: 720 } },
         },
         {
+          id: 'TOCHeading',
+          name: TOC_HEADING_STYLE,
+          basedOn: 'Normal',
+          run: { bold: true, size: 30 },
+        },
+        ...Array.from({ length: TOC_LEVELS }, (_, index) => ({
+          id: `TOC${index + 1}`,
+          name: tocStyleName(index + 1),
+          basedOn: 'Normal',
+          paragraph: { indent: { left: index * 240 } },
+        })),
+        {
           id: 'CodeBlock',
           name: CODE_BLOCK_STYLE,
           basedOn: 'Normal',
@@ -467,9 +584,7 @@ export async function exportDocx(doc: JSONContent, title?: string): Promise<Blob
         { id: 'InlineCode', name: INLINE_CODE_STYLE, run: { font: 'Courier New' } },
       ],
     },
-    sections: [
-      { ...sectionOptions(setup), children: children.length ? children : [new Paragraph({})] },
-    ],
+    sections,
   });
 
   return Packer.toBlob(file);

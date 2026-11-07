@@ -22,6 +22,7 @@ import {
   withOrientation,
   withPageSize,
 } from './pageSetup';
+import { columnSectionsInSelection } from './references';
 import { createEditorUndoStack } from './undoStack';
 
 export type WriteActions = {
@@ -32,6 +33,10 @@ export type WriteActions = {
   insertImage: () => void | Promise<unknown>;
   editLink: () => void;
   openPageSetup: () => void;
+  editFootnote: () => void;
+  openSymbols: () => void;
+  toggleSpellCheck: () => void;
+  isSpellCheckOn: () => boolean;
   importDocx: () => void | Promise<unknown>;
   exportDocx: () => void | Promise<unknown>;
   print: () => void;
@@ -257,6 +262,42 @@ export function createWriteCommands(editor: Editor, actions: WriteActions): Comm
     },
 
     ...createPageCommands(editor, run, can, actions),
+    ...[1, 2, 3].map((count): Command => ({
+      id: `write.columns-${count}`,
+      label: count === 1 ? 'One column' : `${count} columns`,
+      description: 'Applies to the selected paragraphs',
+      run: run((c) => c.setColumns(count)),
+      isActive: () =>
+        Number(columnSectionsInSelection(editor.state)[0]?.node.attrs.count ?? 1) === count,
+    })),
+    {
+      id: 'write.tableOfContents',
+      label: 'Contents',
+      description: 'Insert a table of contents built from your headings',
+      run: run((c) => c.insertTableOfContents()),
+      isEnabled: can((c) => c.insertTableOfContents()),
+    },
+    {
+      id: 'write.footnote',
+      label: 'Footnote',
+      description: 'Add a note at the bottom of the page. Click a note number to edit it.',
+      shortcut: 'Mod+Alt+F',
+      allowInInputs: true,
+      run: actions.editFootnote,
+    },
+    {
+      id: 'write.symbol',
+      label: 'Symbol',
+      description: 'Insert a character that is not on your keyboard',
+      run: actions.openSymbols,
+    },
+    {
+      id: 'write.spellCheck',
+      label: 'Spell check',
+      description: 'Underline misspelled words, using the spell checker built into your browser',
+      run: actions.toggleSpellCheck,
+      isActive: actions.isSpellCheckOn,
+    },
     ...createImageCommands(editor, run),
     ...createCellColorCommands(editor, run, can),
 

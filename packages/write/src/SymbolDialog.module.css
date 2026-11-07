@@ -1,0 +1,29 @@
+.group {
+  margin-bottom: var(--fs-space-3);
+}
+
+.heading {
+  margin: 0 0 var(--fs-space-1);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fs-text-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  gap: 2px;
+}
+
+.symbol {
+  height: 32px;
+  border: 1px solid var(--fs-border);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-surface);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.symbol:hover {
+  background: var(--fs-surface-hover);
+}

@@ -518,6 +518,92 @@ describe('.docx round trip', () => {
     expect(cells.map((c) => c.attrs?.colwidth)).toEqual([null, null]);
   });
 
+  it('keeps footnotes, in order, with their text', async () => {
+    const note = (value: string): JSONContent => ({ type: 'footnote', attrs: { text: value } });
+    const result = await roundTrip(
+      doc(
+        para(text('First'), note('Note one'), text(' claim.')),
+        para(text('Second'), note('Note "two" & more')),
+      ),
+    );
+    const [first, second] = blocks(result);
+    expect(first?.content?.map((n) => n.type)).toEqual(['text', 'footnote', 'text']);
+    expect(first?.content?.[1]?.attrs?.text).toBe('Note one');
+    expect(first?.content?.[2]?.text).toBe(' claim.');
+    expect(second?.content?.[1]?.attrs?.text).toBe('Note "two" & more');
+    // The list of notes at the end of the file is gone.
+    expect(blocks(result)).toHaveLength(2);
+  });
+
+  it('turns a table of contents back into a live one, with page numbers on export', async () => {
+    const heading = (level: number, value: string): JSONContent => ({
+      type: 'heading',
+      attrs: { level },
+      content: [text(value)],
+    });
+    const input = doc(
+      { type: 'tableOfContents' },
+      heading(1, 'Intro'),
+      para(text('body')),
+      heading(2, 'Details'),
+    );
+    const blob = await exportDocx(input, 'Test', [1, 3]);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const xml = await zip.file('word/document.xml')!.async('text');
+    expect(xml).toContain('Intro');
+    expect(xml).toMatch(/<w:tab\/>.*3<\/w:t>/s);
+
+    const result = await importDocx(await blob.arrayBuffer());
+    expect(blocks(result).map((b) => b.type)).toEqual([
+      'tableOfContents',
+      'heading',
+      'paragraph',
+      'heading',
+    ]);
+    expect(JSON.stringify(result)).not.toContain('fs-toc');
+  });
+
+  it('keeps column sections, without adding empty paragraphs', async () => {
+    const section = (count: number, ...content: JSONContent[]): JSONContent => ({
+      type: 'columnSection',
+      attrs: { count },
+      content,
+    });
+    const result = await roundTrip(
+      doc(
+        para(text('before')),
+        section(2, para(text('left')), para(text('right'))),
+        para(text('between')),
+        section(3, para(text('three'))),
+        para(text('after')),
+      ),
+    );
+    expect(blocks(result).map((b) => [b.type, b.attrs?.count])).toEqual([
+      ['paragraph', undefined],
+      ['columnSection', 2],
+      ['paragraph', undefined],
+      ['columnSection', 3],
+      ['paragraph', undefined],
+    ]);
+    expect(blocks(result)[1]?.content).toHaveLength(2);
+    expect(() => PmNode.fromJSON(getSchema(writeExtensions), result).check()).not.toThrow();
+  });
+
+  it('keeps page setup and headers on documents with sections', async () => {
+    const pageSetup = { widthIn: 8.27, heightIn: 11.69, headerText: 'Top', pageNumbers: 'footer' };
+    const result = await roundTrip({
+      ...doc(
+        { type: 'columnSection', attrs: { count: 2 }, content: [para(text('a'))] },
+        para(text('b')),
+      ),
+      attrs: { pageSetup },
+    });
+    const read = readPageSetup(result.attrs?.pageSetup);
+    expect(read.widthIn).toBeCloseTo(8.27);
+    expect(read.headerText).toBe('Top');
+    expect(read.pageNumbers).toBe('footer');
+  });
+
   it('handles an empty document', async () => {
     const result = await roundTrip(doc());
     expect(result.type).toBe('doc');

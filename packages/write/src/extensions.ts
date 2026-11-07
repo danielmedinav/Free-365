@@ -10,6 +10,7 @@ import { FindReplace } from './findReplace';
 import { ResizableImage } from './imageExtension';
 import { PageBreak, PageLayout } from './pageLayout';
 import { ParagraphFormat } from './paragraphFormat';
+import { ColumnSection, Footnote, TableOfContents } from './references';
 import { TableFormat } from './tableFormat';
 
 /** The document schema. Shared by the editor and .docx import so they accept the same content. */
@@ -32,5 +33,8 @@ export const writeExtensions: Extensions = [
   ParagraphFormat,
   PageLayout,
   PageBreak,
+  Footnote,
+  ColumnSection,
+  TableOfContents,
   FindReplace,
 ];

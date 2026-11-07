@@ -6,6 +6,7 @@ import {
   AlignLeft,
   AlignRight,
   Baseline,
+  BookOpenText,
   BetweenHorizontalEnd,
   BetweenVerticalEnd,
   Bold,
@@ -16,6 +17,7 @@ import {
   Heading3,
   Highlighter,
   FileSliders,
+  Footprints,
   ImagePlus,
   Maximize2,
   Minimize2,
@@ -32,6 +34,7 @@ import {
   List,
   ListOrdered,
   Minus,
+  Omega,
   Pilcrow,
   SeparatorHorizontal,
   Printer,
@@ -39,6 +42,7 @@ import {
   RemoveFormatting,
   Replace,
   Search,
+  SpellCheck,
   Strikethrough,
   Subscript,
   Superscript,
@@ -223,6 +227,7 @@ function buildHomeTab(editor: Editor): RibbonTab {
         items: [
           { type: 'command', command: 'write.find', icon: Search, size: 'large' },
           { type: 'command', command: 'write.replace', icon: Replace, size: 'large' },
+          { type: 'command', command: 'write.spellCheck', icon: SpellCheck, size: 'large' },
         ],
       },
     ],
@@ -240,6 +245,15 @@ const INSERT_TAB: RibbonTab = {
         { type: 'command', command: 'write.insertTable', icon: Table, size: 'large' },
         { type: 'command', command: 'write.insertImage', icon: ImagePlus, size: 'large' },
         { type: 'command', command: 'write.horizontalRule', icon: Minus, size: 'large' },
+        { type: 'command', command: 'write.symbol', icon: Omega, size: 'large' },
+      ],
+    },
+    {
+      id: 'references',
+      label: 'References',
+      items: [
+        { type: 'command', command: 'write.tableOfContents', icon: BookOpenText, size: 'large' },
+        { type: 'command', command: 'write.footnote', icon: Footprints, size: 'large' },
       ],
     },
     {
@@ -398,6 +412,26 @@ const LAYOUT_TAB: RibbonTab = {
                 { command: 'write.pageNumbers-footer', label: 'Numbers in footer' },
                 { command: 'write.pageNumbers-header', label: 'Numbers in header' },
               ]}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      id: 'columns',
+      label: 'Columns',
+      items: [
+        {
+          type: 'custom',
+          id: 'column-count',
+          render: () => (
+            <CommandSelect
+              label="Columns"
+              width={120}
+              options={[1, 2, 3].map((count) => ({
+                command: `write.columns-${count}`,
+                label: count === 1 ? 'One column' : `${count} columns`,
+              }))}
             />
           ),
         },

@@ -1,9 +1,21 @@
 import { generateJSON, type JSONContent } from '@tiptap/core';
 import mammoth from 'mammoth';
 import { writeExtensions } from '../extensions';
-import { applyDirectFormatting, embedDirectFormatting, PAGE_BREAK_CLASS } from './directFormatting';
+import {
+  applyDirectFormatting,
+  embedDirectFormatting,
+  PAGE_BREAK_CLASS,
+  TOC_ENTRY_CLASS,
+} from './directFormatting';
 import { readDocxPageSetup } from './pageSetupImport';
-import { CODE_BLOCK_STYLE, DIVIDER_STYLE, INLINE_CODE_STYLE, QUOTE_STYLE } from './styleNames';
+import {
+  CODE_BLOCK_STYLE,
+  DIVIDER_STYLE,
+  INLINE_CODE_STYLE,
+  QUOTE_STYLE,
+  TOC_HEADING_STYLE,
+  tocStyleName,
+} from './styleNames';
 
 const STYLE_MAP = [
   'u => u',
@@ -12,6 +24,10 @@ const STYLE_MAP = [
   `p[style-name='${CODE_BLOCK_STYLE}'] => pre:separator('\\n')`,
   `p[style-name='${DIVIDER_STYLE}'] => hr:fresh`,
   `r[style-name='${INLINE_CODE_STYLE}'] => code`,
+  `p[style-name='${TOC_HEADING_STYLE}'] => p.${TOC_ENTRY_CLASS}:fresh`,
+  ...[1, 2, 3, 4, 5, 6].map(
+    (level) => `p[style-name='${tocStyleName(level)}'] => p.${TOC_ENTRY_CLASS}:fresh`,
+  ),
 ];
 
 /** Converts a .docx file to a FreeWrite document. The editor's schema drops unsupported content. */

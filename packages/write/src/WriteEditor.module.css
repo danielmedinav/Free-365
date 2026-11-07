@@ -263,6 +263,79 @@
   background: var(--fs-find-current);
 }
 
+/* Also measured off-screen by pagination, so it has to look the same in both places. */
+.pages :global(.fs-footnote-line) {
+  font-family: var(--fs-page-font);
+  font-size: 9pt;
+  line-height: 1.2;
+  color: var(--fs-page-text);
+  overflow-wrap: break-word;
+}
+
+.page :global(.tiptap) {
+  counter-reset: fs-footnote;
+}
+
+.page :global(.fs-footnote) {
+  counter-increment: fs-footnote;
+  color: var(--fs-focus);
+  cursor: pointer;
+}
+
+.page :global(.fs-footnote::after) {
+  content: counter(fs-footnote);
+}
+
+.page :global(.fs-footnote.ProseMirror-selectednode) {
+  outline: 1px solid var(--fs-focus);
+}
+
+.page :global(.fs-columns) {
+  column-gap: 0.5in;
+  margin-bottom: 6pt;
+}
+
+.page :global(.fs-columns > *) {
+  break-inside: avoid-column;
+}
+
+.page :global(.fs-toc) {
+  margin-bottom: 12pt;
+  user-select: none;
+}
+
+.page :global(.fs-toc.ProseMirror-selectednode) {
+  outline: 2px solid var(--fs-focus);
+}
+
+.page :global(.fs-toc-title) {
+  margin-bottom: 6pt;
+  font-size: 1.4em;
+  font-weight: 700;
+}
+
+.page :global(.fs-toc-empty) {
+  color: var(--fs-text-muted);
+}
+
+.page :global(.fs-toc-entry) {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--fs-space-4);
+  width: 100%;
+  padding-block: 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.page :global(.fs-toc-entry:hover) {
+  color: var(--fs-focus);
+}
+
 .noticeActions {
   display: flex;
   justify-content: flex-end;

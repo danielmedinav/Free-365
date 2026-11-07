@@ -29,6 +29,9 @@ async function fillPages(page: Page, count: number) {
 
 /** Every line of text sits inside the text area of some sheet, never across a gap. */
 async function expectTextInsidePages(page: Page) {
+  // Pages settle in the frame after a change, before the browser paints it.
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await page.evaluate(() => new Promise(requestAnimationFrame));
   const problems = await page.evaluate(() => {
     const root = document.querySelector('.tiptap') as HTMLElement;
     const sheetList = Array.from(document.querySelectorAll('.fs-sheet')).map((s) =>
@@ -165,6 +168,20 @@ test('a page break in the middle of a paragraph splits it', async ({ page }) => 
   await expect(sheets(page)).toHaveCount(2);
   await expect(body(page).locator('p')).toHaveText(['One', 'Two']);
   await expect(page.getByText('Page 2 of 2')).toBeVisible();
+});
+
+test('a page break on an empty line keeps the cursor on the new page', async ({ page }) => {
+  await page.keyboard.type('First');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(sheets(page)).toHaveCount(2);
+  await page.keyboard.type('Second');
+
+  // Typing must not replace the break.
+  await expect(body(page).locator('hr.fs-page-break')).toHaveCount(1);
+  await expect(sheets(page)).toHaveCount(2);
+  await expect(page.getByText('Page 2 of 2')).toBeVisible();
+  await expect(body(page).locator('p', { hasText: 'Second' })).toHaveCount(1);
 });
 
 test('Shift+Enter makes a line break, not a page', async ({ page }) => {

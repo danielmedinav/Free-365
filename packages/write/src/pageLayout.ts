@@ -1,5 +1,5 @@
 import { Extension, Node } from '@tiptap/core';
-import { TextSelection } from '@tiptap/pm/state';
+import { insertBlockAndContinue } from './insertBlock';
 import { DEFAULT_PAGE_SETUP, readPageSetup, type PageSetup } from './pageSetup';
 
 declare module '@tiptap/core' {
@@ -63,25 +63,9 @@ export const PageBreak = Node.create({
       setPageBreak:
         () =>
         ({ state, tr, dispatch }) => {
-          const { pageBreak, paragraph } = state.schema.nodes;
-          if (!pageBreak || !paragraph) return false;
-          if (dispatch) {
-            const start = tr.selection.from;
-            tr.replaceSelectionWith(pageBreak.create());
-
-            // It may land outside the paragraph the cursor was in, so look for where it went.
-            let after = -1;
-            tr.doc.nodesBetween(start, tr.doc.content.size, (node, pos) => {
-              if (after < 0 && node.type === pageBreak && pos >= start - 1) after = pos + 1;
-              return after < 0;
-            });
-            if (after < 0) return false;
-
-            // Typing continues on the new page, which needs a paragraph to type in.
-            const next = tr.doc.resolve(after).nodeAfter;
-            if (!next || !next.isTextblock) tr.insert(after, paragraph.create());
-            tr.setSelection(TextSelection.create(tr.doc, after + 1)).scrollIntoView();
-          }
+          const { pageBreak } = state.schema.nodes;
+          if (!pageBreak) return false;
+          if (dispatch) insertBlockAndContinue(state, tr, pageBreak);
           return true;
         },
     };

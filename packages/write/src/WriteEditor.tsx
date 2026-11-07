@@ -13,6 +13,7 @@ import {
 import type { JSONContent } from '@tiptap/core';
 import { Placeholder } from '@tiptap/extensions';
 import { closeHistory } from '@tiptap/pm/history';
+import type { Node as PmNode } from '@tiptap/pm/model';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createAutosaver, type SaveStatus } from './autosave';
@@ -29,10 +30,12 @@ import {
   imageFileToDataUrl,
   insertImageFiles,
 } from './images';
-import { paginationKey, Pagination } from './paginationPlugin';
+import { Pagination, pageOfPosition, paginationKey } from './paginationPlugin';
 import { PageSetupDialog } from './PageSetupDialog';
 import { PageSheets } from './PageSheets';
 import { PX_PER_INCH, readPageSetup } from './pageSetup';
+import { collectFootnotes, headingPages } from './references';
+import { SymbolDialog } from './SymbolDialog';
 import { countWords } from './wordCount';
 import styles from './WriteEditor.module.css';
 import { buildWriteRibbon } from './writeRibbon';
@@ -42,6 +45,12 @@ const DOCX_FILE_TYPE: FileTypeOption = {
   mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   extensions: ['.docx'],
 };
+
+const SPELL_CHECK_KEY = 'free360.write.spellCheck';
+
+function readSpellCheck(): boolean {
+  return localStorage.getItem(SPELL_CHECK_KEY) !== 'off';
+}
 
 const SAVE_LABELS: Record<SaveStatus, string> = {
   saved: 'Saved locally',
@@ -58,6 +67,12 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
   const [notice, setNotice] = useState<string | null>(null);
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
+  const [symbolsOpen, setSymbolsOpen] = useState(false);
+  const [spellCheck, setSpellCheck] = useState(readSpellCheck);
+  // The note being written or edited; `pos` is null for a new one.
+  const [footnoteDraft, setFootnoteDraft] = useState<{ text: string; pos: number | null } | null>(
+    null,
+  );
   const [pendingImport, setPendingImport] = useState<{ doc: JSONContent; title: string } | null>(
     null,
   );
@@ -65,6 +80,12 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
   const reportImageError = (error: unknown) => {
     console.error(error);
     setNotice(error instanceof ImageRejectedError ? error.message : 'Could not insert the image.');
+  };
+
+  const openFootnote = (node: PmNode, pos: number) => {
+    if (node.type.name !== 'footnote') return false;
+    setFootnoteDraft({ text: String(node.attrs.text ?? ''), pos });
+    return true;
   };
 
   const editor = useEditor({
@@ -80,6 +101,13 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': 'Document body',
+        spellcheck: String(spellCheck),
+      },
+      handleClickOn(_view, _pos, node, nodePos) {
+        return openFootnote(node, nodePos);
+      },
+      handleDoubleClickOn(_view, _pos, node, nodePos) {
+        return openFootnote(node, nodePos);
       },
       handleClick(_view, _pos, event) {
         if (!event.ctrlKey && !event.metaKey) return false;
@@ -155,13 +183,49 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
     editor,
     selector: ({ editor: e }) => {
       const gaps = paginationKey.getState(e.state)?.gaps ?? [];
-      const { from } = e.state.selection;
       return {
         count: gaps.length + 1,
-        current: gaps.filter((gap) => (gap.positions[0] ?? 0) <= from).length + 1,
+        current: pageOfPosition(gaps, e.state.selection.from),
       };
     },
   });
+
+  const footnotes = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      const gaps = paginationKey.getState(e.state)?.gaps ?? [];
+      return collectFootnotes(e.state.doc).map(({ pos, number, text }) => ({
+        number,
+        text,
+        page: pageOfPosition(gaps, pos),
+      }));
+    },
+  });
+
+  const applyFootnote = (text: string) => {
+    const pos = footnoteDraft?.pos ?? null;
+    const note = text.trim();
+    if (pos === null) {
+      if (note) {
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: 'footnote', attrs: { text: note } })
+          .run();
+      }
+      return;
+    }
+    // Emptying a note removes it, along with its number in the text.
+    editor
+      .chain()
+      .focus()
+      .command(({ tr }) => {
+        if (note) tr.setNodeAttribute(pos, 'text', note);
+        else tr.delete(pos, pos + 1);
+        return true;
+      })
+      .run();
+  };
 
   const applyImport = (doc: JSONContent, title: string) => {
     editor
@@ -216,6 +280,24 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
       save: () => autosaver.flush(),
       editLink: () => setLinkDraft(String(editor.getAttributes('link').href ?? '')),
       openPageSetup: () => setPageSetupOpen(true),
+      editFootnote() {
+        const { selection, doc } = editor.state;
+        const selected = doc.nodeAt(selection.from);
+        const editing = !selection.empty && selected?.type.name === 'footnote';
+        setFootnoteDraft(
+          editing
+            ? { text: String(selected.attrs.text ?? ''), pos: selection.from }
+            : { text: '', pos: null },
+        );
+      },
+      openSymbols: () => setSymbolsOpen(true),
+      toggleSpellCheck() {
+        setSpellCheck((on) => {
+          localStorage.setItem(SPELL_CHECK_KEY, on ? 'off' : 'on');
+          return !on;
+        });
+      },
+      isSpellCheckOn: () => spellCheck,
       async insertImage() {
         const [file] = await pickFiles([IMAGE_FILE_TYPE]);
         if (!file) return;
@@ -243,7 +325,7 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
       async exportDocx() {
         try {
           const { exportDocx } = await import('./docx/exportDocx');
-          const blob = await exportDocx(editor.getJSON(), meta.title);
+          const blob = await exportDocx(editor.getJSON(), meta.title, headingPages(editor.state));
           await saveBlob(blob, toFileName(meta.title, 'docx'), DOCX_FILE_TYPE);
         } catch (error) {
           console.error(error);
@@ -253,6 +335,9 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
       print: () => window.print(),
     }),
   );
+
+  // The ribbon reads the spell check state through its command, so it needs telling.
+  useEffect(() => registry.notify(), [registry, spellCheck]);
 
   return (
     <AppShell
@@ -287,10 +372,29 @@ export function WriteEditor({ meta, repo, shell, fileTab, initialDoc }: WriteEdi
             } as CSSProperties
           }
         >
-          <PageSheets setup={setup} pageCount={pages.count} />
+          <PageSheets setup={setup} pageCount={pages.count} footnotes={footnotes} />
           <EditorContent editor={editor} className={styles.page} />
         </div>
       </div>
+      <PromptDialog
+        open={footnoteDraft !== null}
+        onOpenChange={(open) => {
+          if (!open) setFootnoteDraft(null);
+        }}
+        title="Footnote"
+        description={
+          footnoteDraft?.pos === null ? undefined : 'Leave this empty to remove the footnote.'
+        }
+        label="Footnote text"
+        initialValue={footnoteDraft?.text ?? ''}
+        confirmLabel="Save"
+        onSubmit={applyFootnote}
+      />
+      <SymbolDialog
+        open={symbolsOpen}
+        onOpenChange={setSymbolsOpen}
+        onPick={(symbol) => editor.chain().focus().insertContent(symbol).run()}
+      />
       <PageSetupDialog
         setup={setup}
         open={pageSetupOpen}

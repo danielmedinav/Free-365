@@ -80,4 +80,52 @@ describe('computeBreaks', () => {
     expect(computeBreaks(stack(500), 100)).toEqual([]);
     expect(computeBreaks(stack(10, 500, 10), 100).map((b) => b.positions)).toEqual([[1], [2]]);
   });
+
+  describe('footnotes', () => {
+    const withNote = (unit: PageUnit, top: number, height: number): PageUnit => ({
+      ...unit,
+      notes: [...(unit.notes ?? []), { top, height }],
+    });
+
+    it('moves text to the next page to make room for a note', () => {
+      const units = stack(60, 30, 30);
+      units[0] = withNote(units[0]!, 10, 25);
+      // Without the note the first two blocks fit. With 25 + 5 reserved, only the first does.
+      expect(computeBreaks(units, 100, 5).map((b) => b.positions)).toEqual([[1]]);
+    });
+
+    it('adds no room when a page has no notes', () => {
+      expect(computeBreaks(stack(50, 50), 100, 5)).toEqual([]);
+    });
+
+    it('keeps adding up notes on the same page', () => {
+      const units = stack(20, 20, 20, 20);
+      units[0] = withNote(units[0]!, 5, 10);
+      units[1] = withNote(units[1]!, 25, 10);
+      // 20 of notes + 5 padding leave 75: three 20px blocks fit, the fourth does not.
+      expect(computeBreaks(units, 100, 5).map((b) => b.positions)).toEqual([[3]]);
+    });
+
+    it('starts each page with no notes reserved', () => {
+      const units = stack(90, 95);
+      units[0] = withNote(units[0]!, 5, 5);
+      expect(computeBreaks(units, 100, 0).map((b) => b.positions)).toEqual([[1]]);
+    });
+
+    it('sends a note with its line to the next page when the paragraph splits', () => {
+      const unit = withNote(
+        withLines({ top: 0, bottom: 200, positions: [0] }, 20, 10),
+        150, // on a line that is past the end of the first page anyway
+        30,
+      );
+      // The note doesn't shrink the first page, so it still holds five 20px lines.
+      expect(computeBreaks([unit], 100, 0)[0]?.positions).toEqual([15]);
+    });
+
+    it('does not loop forever on a note taller than the page', () => {
+      const units = stack(50, 50);
+      units[0] = withNote(units[0]!, 5, 500);
+      expect(() => computeBreaks(units, 100, 5)).not.toThrow();
+    });
+  });
 });

@@ -7,6 +7,8 @@ import JSZip from 'jszip';
  * are turned into real inline styles, which the editor understands.
  */
 export const PAGE_BREAK_CLASS = 'fs-page-break';
+export const TOC_ENTRY_CLASS = 'fs-toc-entry';
+const SECTION_ATTRIBUTE = 'data-fs-section';
 const COLUMNS_ATTRIBUTE = 'data-fs-columns';
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -59,6 +61,10 @@ const BREAK_BEFORE = 'break-before';
 /** Also not CSS: settings for the table cell or whole table this paragraph is in. */
 const CELL_BACKGROUND = 'cell-background';
 const TABLE_COLUMNS = 'table-columns';
+/** Also not CSS: the column count of this paragraph's section. */
+const SECTION_COLUMNS = 'section-columns';
+/** Also not CSS: an empty paragraph that only existed to hold a section's settings. */
+const DROP_PARAGRAPH = 'drop-paragraph';
 
 function child(parent: Element | null | undefined, name: string): Element | null {
   if (!parent) return null;
@@ -206,6 +212,44 @@ function isEmpty(styles: Styles): boolean {
   return Object.keys(styles).length === 0;
 }
 
+/** Marks everything in a multi-column section, as Mammoth reads straight through sections. */
+function embedSections(xml: Document): void {
+  const body = xml.getElementsByTagNameNS(WORD_NS, 'body')[0];
+  if (!body) return;
+  let pending: Element[] = [];
+
+  const finish = (section: Element) => {
+    const columns = Number(attr(child(section, 'cols'), 'num')) || 1;
+    if (columns > 1) {
+      for (const element of pending) {
+        const paragraph =
+          element.localName === 'tbl'
+            ? child(child(child(element, 'tr'), 'tc'), 'p')
+            : element.localName === 'p'
+              ? element
+              : null;
+        if (paragraph) insertBlockMarker(xml, paragraph, { [SECTION_COLUMNS]: String(columns) });
+      }
+    }
+    pending = [];
+  };
+
+  for (const element of Array.from(body.children)) {
+    if (element.namespaceURI !== WORD_NS) continue;
+    if (element.localName === 'sectPr') {
+      finish(element);
+      continue;
+    }
+    pending.push(element);
+    const section = child(child(element, 'pPr'), 'sectPr');
+    if (section) {
+      const hasContent = element.getElementsByTagNameNS(WORD_NS, 'r').length > 0;
+      finish(section);
+      if (!hasContent) insertBlockMarker(xml, element, { [DROP_PARAGRAPH]: '1' });
+    }
+  }
+}
+
 function embedInDocument(xml: Document): void {
   for (const run of xml.getElementsByTagNameNS(WORD_NS, 'r')) {
     const styles = runStyles(child(run, 'rPr'));
@@ -223,6 +267,7 @@ function embedInDocument(xml: Document): void {
     if (!isEmpty(styles)) insertBlockMarker(xml, paragraph, styles);
   }
 
+  embedSections(xml);
   embedImageData(xml);
   embedTableData(xml);
 }
@@ -241,7 +286,9 @@ export async function embedDirectFormatting(file: ArrayBuffer): Promise<ArrayBuf
 
 function applyStyles(element: HTMLElement, payload: string): void {
   for (const [name, value] of Object.entries(JSON.parse(payload) as Styles)) {
-    if (name === CELL_BACKGROUND) {
+    if (name === SECTION_COLUMNS || name === DROP_PARAGRAPH) {
+      continue;
+    } else if (name === CELL_BACKGROUND) {
       element.closest<HTMLElement>('td, th')?.style.setProperty('background-color', value);
     } else if (name === TABLE_COLUMNS) {
       element.closest('table')?.setAttribute(COLUMNS_ATTRIBUTE, value);
@@ -258,13 +305,26 @@ function applyStyles(element: HTMLElement, payload: string): void {
 const BLOCK_PATTERN = new RegExp(`${BLOCK_START}(.*?)${BLOCK_END}`, 'gs');
 const RUN_PATTERN = new RegExp(`${RUN_START}(.*?)${RUN_TEXT}(.*?)${RUN_END}`, 'gs');
 
+function topLevelElement(node: Node): Element | null {
+  let current = node.parentElement;
+  while (current?.parentElement && current.parentElement.tagName !== 'BODY') {
+    current = current.parentElement;
+  }
+  return current;
+}
+
 function applyToTextNode(node: Text, parsed: Document): void {
   let text = node.data;
 
   for (const [marker, payload] of text.matchAll(BLOCK_PATTERN)) {
     text = text.replace(marker, '');
     const block = node.parentElement?.closest<HTMLElement>('p, h1, h2, h3, h4, h5, h6');
+    const settings = JSON.parse(payload!) as Styles;
+    if (settings[SECTION_COLUMNS]) {
+      topLevelElement(node)?.setAttribute(SECTION_ATTRIBUTE, settings[SECTION_COLUMNS]);
+    }
     if (block) applyStyles(block, payload!);
+    if (settings[DROP_PARAGRAPH]) block?.remove();
   }
 
   const fragment = parsed.createDocumentFragment();
@@ -322,6 +382,65 @@ function liftImage(image: Element): void {
   if (!paragraph.textContent && !paragraph.querySelector('br, img')) paragraph.remove();
 }
 
+/** Puts neighboring elements marked with the same column count into one section. */
+function wrapColumnSections(parsed: Document): void {
+  let section: HTMLElement | null = null;
+  let count = '';
+  for (const element of Array.from(parsed.body.children)) {
+    const columns = element.getAttribute(SECTION_ATTRIBUTE);
+    element.removeAttribute(SECTION_ATTRIBUTE);
+    if (!columns) {
+      section = null;
+      continue;
+    }
+    if (!section || count !== columns) {
+      section = parsed.createElement('div');
+      section.setAttribute('data-type', 'column-section');
+      section.setAttribute('data-count', columns);
+      element.before(section);
+      count = columns;
+    }
+    section.append(element);
+  }
+}
+
+/** Mammoth lists notes at the end of the document; each one moves into its mark in the text. */
+function applyFootnotes(parsed: Document): void {
+  const marks = parsed.body.querySelectorAll('a[id^="footnote-ref-"], a[id^="endnote-ref-"]');
+  for (const mark of marks) {
+    const target = mark.getAttribute('href')?.slice(1);
+    const note = target ? parsed.getElementById(target) : null;
+    if (!note) continue;
+    const content = note.cloneNode(true) as Element;
+    // Drops the link from the note back up to its mark.
+    for (const back of content.querySelectorAll(
+      'a[href^="#footnote-ref-"], a[href^="#endnote-ref-"]',
+    )) {
+      back.remove();
+    }
+    const replacement = parsed.createElement('sup');
+    replacement.setAttribute('data-footnote', content.textContent.trim());
+    (mark.closest('sup') ?? mark).replaceWith(replacement);
+    const list = note.closest('ol');
+    note.remove();
+    if (list && !list.children.length) list.remove();
+  }
+}
+
+/** A table of contents is rebuilt from the headings, so its old entries become one live block. */
+function applyTableOfContents(parsed: Document): void {
+  for (const entry of Array.from(parsed.body.querySelectorAll(`p.${TOC_ENTRY_CLASS}`))) {
+    const previous = entry.previousElementSibling;
+    if (previous?.getAttribute('data-type') === 'table-of-contents') {
+      entry.remove();
+    } else {
+      const contents = parsed.createElement('div');
+      contents.setAttribute('data-type', 'table-of-contents');
+      entry.replaceWith(contents);
+    }
+  }
+}
+
 /** Turns the markers in Mammoth's HTML into inline styles. */
 export function applyDirectFormatting(html: string): string {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
@@ -338,6 +457,10 @@ export function applyDirectFormatting(html: string): string {
   for (const table of parsed.body.querySelectorAll(`table[${COLUMNS_ATTRIBUTE}]`)) {
     applyColumnWidths(table);
   }
+
+  applyFootnotes(parsed);
+  applyTableOfContents(parsed);
+  wrapColumnSections(parsed);
 
   // Mammoth writes a page break inside a paragraph, and HTML splits that around it, leaving empty
   // paragraphs behind that were never in the document.

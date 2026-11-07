@@ -29,6 +29,16 @@
   bottom: calc(var(--fs-margin-bottom) * 0.4);
 }
 
+.notes {
+  position: absolute;
+  left: var(--fs-margin-left);
+  right: var(--fs-margin-right);
+  bottom: var(--fs-margin-bottom);
+  padding-top: 8px;
+  border-top: 1px solid var(--fs-border-strong);
+  box-sizing: border-box;
+}
+
 @media print {
   .sheet {
     box-shadow: none;
