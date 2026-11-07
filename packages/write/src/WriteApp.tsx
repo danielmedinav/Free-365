@@ -1,8 +1,8 @@
+import { clearDraft, readDraft } from '@free360/storage';
 import { AppIcon, AppShell, type EditorAppProps } from '@free360/ui';
 import type { JSONContent } from '@tiptap/core';
 import { useEffect, useState } from 'react';
 import { readDoc, UnsupportedVersionError, WRITE_SCHEMA_VERSION, type WriteData } from './content';
-import { clearDraft, readDraft } from './draft';
 import styles from './WriteApp.module.css';
 import { WriteEditor } from './WriteEditor';
 
@@ -22,7 +22,7 @@ export function WriteApp(props: EditorAppProps) {
       const content = await repo.getContent<WriteData | null>(meta.id);
       // Check the version first: it also guards the recovered draft against overwriting newer data.
       const doc = readDoc(content);
-      const draft = readDraft(meta.id, meta.updatedAt);
+      const draft = readDraft<JSONContent>(meta.id, meta.updatedAt);
       if (draft) await repo.saveContent<WriteData>(meta.id, { doc: draft }, WRITE_SCHEMA_VERSION);
       clearDraft(meta.id);
       return draft ?? doc;

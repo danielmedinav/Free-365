@@ -25,7 +25,7 @@ describe('recovery drafts', () => {
   });
 
   it('ignores corrupt data', () => {
-    localStorage.setItem('free360.write.draft.a', '{not json');
+    localStorage.setItem('free360.draft.a', '{not json');
     expect(readDraft('a', 0)).toBeUndefined();
   });
 

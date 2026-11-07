@@ -1,0 +1,29 @@
+.shortcuts {
+  display: flex;
+  gap: var(--fs-space-1);
+  margin-bottom: var(--fs-space-2);
+}
+
+.list {
+  max-height: 280px;
+  margin: 0;
+  padding: var(--fs-space-2);
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--fs-border);
+  border-radius: var(--fs-radius-sm);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--fs-space-2);
+  padding: 2px 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--fs-space-2);
+  margin-top: var(--fs-space-4);
+}

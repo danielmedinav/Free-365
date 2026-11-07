@@ -41,7 +41,7 @@ test('files persist across reloads and open from the list', async ({ page }) => 
   await page.reload();
   await page.getByRole('link', { name: /Untitled spreadsheet/ }).click();
   await expect(page).toHaveURL(/\/grid\//);
-  await expect(page.getByText('FreeGrid is coming in Milestone 2')).toBeVisible();
+  await expect(page.getByRole('grid')).toBeVisible();
 });
 
 test('renames and deletes from the file menu', async ({ page }) => {

@@ -1,0 +1,11 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.noticeActions {
+  display: flex;
+  justify-content: flex-end;
+}

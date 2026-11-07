@@ -1,0 +1,169 @@
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--fs-surface);
+  overscroll-behavior: contain;
+}
+
+.scroller:focus {
+  outline: none;
+}
+
+.canvas {
+  position: relative;
+}
+
+.columnHeaders {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 24px;
+  background: var(--fs-surface-2);
+  border-bottom: 1px solid var(--fs-border-strong);
+}
+
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 48px;
+  height: 23px;
+  background: var(--fs-surface-2);
+  border-right: 1px solid var(--fs-border-strong);
+}
+
+.columnHeader {
+  position: absolute;
+  top: 0;
+  height: 23px;
+  line-height: 23px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--fs-text-muted);
+  background: var(--fs-surface-2);
+  border-right: 1px solid var(--fs-border);
+  user-select: none;
+  cursor: default;
+}
+
+.resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 1;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.rowHeaders {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 48px;
+  background: var(--fs-surface-2);
+  border-right: 1px solid var(--fs-border-strong);
+}
+
+.rowHeader {
+  position: absolute;
+  left: 0;
+  width: 47px;
+  line-height: 23px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--fs-text-muted);
+  background: var(--fs-surface-2);
+  border-bottom: 1px solid var(--fs-border);
+  user-select: none;
+  cursor: default;
+}
+
+.headerSelected {
+  background: var(--fs-surface-active);
+  color: var(--fs-text);
+  font-weight: 600;
+}
+
+.cells {
+  position: absolute;
+  left: 48px;
+  top: 24px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.columnLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--fs-border);
+  pointer-events: none;
+}
+
+.rowLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--fs-border);
+  pointer-events: none;
+}
+
+.cell {
+  position: absolute;
+  padding: 0 4px;
+  overflow: hidden;
+  line-height: 23px;
+  white-space: nowrap;
+  border-right: 1px solid var(--fs-border);
+  border-bottom: 1px solid var(--fs-border);
+  background: var(--fs-surface);
+  color: var(--fs-text);
+}
+
+.error {
+  color: var(--fs-danger);
+}
+
+.filterButton {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid var(--fs-border-strong);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-surface);
+  color: var(--fs-text);
+  cursor: pointer;
+}
+
+.selection {
+  position: absolute;
+  background: color-mix(in srgb, var(--fs-app-accent) 12%, transparent);
+  border: 1px solid var(--fs-app-accent);
+  pointer-events: none;
+}
+
+.focusCell {
+  position: absolute;
+  border: 2px solid var(--fs-app-accent);
+  pointer-events: none;
+}
+
+.editor {
+  position: absolute;
+  z-index: 2;
+  padding: 0 4px;
+  border: 2px solid var(--fs-app-accent);
+  background: var(--fs-surface);
+  outline: none;
+  field-sizing: content;
+}

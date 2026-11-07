@@ -17,6 +17,14 @@
   --fs-grid: #0f8f7a;
   --fs-deck: #e0573f;
   --fs-app-accent: #5b6b82;
+  /* Text on a cell's fill color: the fills on offer are all pale, in any theme. */
+  --fs-on-fill: #1d2330;
+  --fs-chart-1: #4f5bd5;
+  --fs-chart-2: #0f8f7a;
+  --fs-chart-3: #e0573f;
+  --fs-chart-4: #d29b00;
+  --fs-chart-5: #8e44ad;
+  --fs-chart-6: #2980b9;
 }
 
 :root,

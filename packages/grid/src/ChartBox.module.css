@@ -1,0 +1,40 @@
+.box {
+  position: absolute;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid var(--fs-border-strong);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-surface);
+  box-shadow: var(--fs-shadow);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding-left: var(--fs-space-2);
+  background: var(--fs-surface-2);
+  border-bottom: 1px solid var(--fs-border);
+  font-size: 12px;
+  color: var(--fs-text-muted);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.close {
+  width: 26px;
+  height: 26px;
+}
+
+.handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(135deg, transparent 50%, var(--fs-border-strong) 50%);
+  cursor: nwse-resize;
+  touch-action: none;
+}

@@ -1,0 +1,41 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--fs-space-2);
+  height: 34px;
+  padding: 0 var(--fs-space-2);
+  background: var(--fs-surface);
+  border-bottom: 1px solid var(--fs-border);
+}
+
+.location {
+  width: 96px;
+  height: 26px;
+  padding: 0 var(--fs-space-2);
+  border: 1px solid var(--fs-border);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-surface);
+  text-align: center;
+}
+
+.fx {
+  font-family: var(--fs-font-mono);
+  font-style: italic;
+  color: var(--fs-text-muted);
+}
+
+.formula {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 var(--fs-space-2);
+  border: 1px solid var(--fs-border);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-surface);
+}
+
+.location:focus,
+.formula:focus {
+  outline: 2px solid var(--fs-focus);
+  outline-offset: -1px;
+}

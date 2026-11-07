@@ -42,11 +42,15 @@ than a page runs across the gap, a cell merged across rows that a page break fal
 across it too, and header rows don't repeat on later pages. Wrapped images sit at the left or right
 margin only; they can't be dragged to any spot on the page.
 
-## Milestone 2: FreeGrid MVP ⬜
+## Milestone 2: FreeGrid MVP ✅
 
 Virtualized grid, cell editing, formula bar, HyperFormula (SUM, AVERAGE, IF, VLOOKUP, ...),
 number/text formatting, multiple sheets, Chart.js charts, sort/filter, .xlsx and .csv
 import/export.
+
+Known gaps, for later: no drag-to-fill handle, merged cells, frozen panes, row height changes,
+conditional formatting, or printing. Charts go into .xlsx files as pictures, and .xlsx import leaves
+out charts and pictures. A sheet holds up to 10,000 rows and 100 columns.
 
 ## Milestone 3: FreeDeck MVP ⬜
 

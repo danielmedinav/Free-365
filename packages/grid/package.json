@@ -10,7 +10,16 @@
   "dependencies": {
     "@free360/commands": "workspace:*",
     "@free360/core": "workspace:*",
+    "@free360/storage": "workspace:*",
     "@free360/ui": "workspace:*",
+    "chart.js": "^4.6.1",
+    "exceljs": "^4.4.0",
+    "hyperformula": "^3.5.0",
+    "lucide-react": "^1.66.0",
+    "papaparse": "^5.7.0",
     "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.5.2"
   }
 }
