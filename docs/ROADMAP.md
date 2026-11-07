@@ -52,10 +52,14 @@ Known gaps, for later: no drag-to-fill handle, merged cells, frozen panes, row h
 conditional formatting, or printing. Charts go into .xlsx files as pictures, and .xlsx import leaves
 out charts and pictures. A sheet holds up to 10,000 rows and 100 columns.
 
-## Milestone 3: FreeDeck MVP ⬜
+## Milestone 3: FreeDeck MVP ✅
 
 Slide sorter, text/shapes/images, layouts and themes, presenter mode, simple transitions,
 .pptx export, PDF export.
+
+Known gaps, for later: no .pptx import, and no selecting several objects at once. Exported .pptx
+files don't carry transitions, and PDF pages are pictures, so their text can't be selected. Tables and
+charts on slides wait for Milestone 4.
 
 ## Milestone 4: Cross-app ⬜
 

@@ -1,0 +1,58 @@
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: var(--fs-present-bg);
+  cursor: pointer;
+}
+
+.slide[data-transition='fade'] {
+  animation: fade-in 500ms ease-out;
+}
+
+.slide[data-transition='slide'] {
+  animation: slide-in 450ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+.end {
+  color: var(--fs-present-text);
+  font-size: 20px;
+}
+
+.counter {
+  position: absolute;
+  right: var(--fs-space-3);
+  bottom: var(--fs-space-2);
+  padding: 2px var(--fs-space-2);
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-overlay);
+  color: var(--fs-present-text);
+  font-size: 12px;
+}
+
+.notes {
+  position: absolute;
+  left: 50%;
+  bottom: var(--fs-space-6);
+  max-width: min(800px, 90vw);
+  padding: var(--fs-space-3) var(--fs-space-4);
+  transform: translateX(-50%);
+  border-radius: var(--fs-radius);
+  background: var(--fs-overlay);
+  color: var(--fs-present-text);
+  white-space: pre-wrap;
+}

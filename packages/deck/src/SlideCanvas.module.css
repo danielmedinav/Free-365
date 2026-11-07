@@ -1,0 +1,30 @@
+.area {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--fs-bg);
+}
+
+.area:focus {
+  outline: none;
+}
+
+.slide {
+  position: relative;
+  box-shadow: var(--fs-shadow);
+}
+
+.overlay {
+  position: absolute;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  outline: 2px dashed var(--fs-app-accent);
+  background: transparent;
+  resize: none;
+  transform-origin: top left;
+  field-sizing: content;
+}

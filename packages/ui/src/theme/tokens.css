@@ -19,6 +19,9 @@
   --fs-app-accent: #5b6b82;
   /* Text on a cell's fill color: the fills on offer are all pale, in any theme. */
   --fs-on-fill: #1d2330;
+  /* Behind a presentation, whatever the theme. */
+  --fs-present-bg: #000000;
+  --fs-present-text: #ffffff;
   --fs-chart-1: #4f5bd5;
   --fs-chart-2: #0f8f7a;
   --fs-chart-3: #e0573f;

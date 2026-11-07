@@ -179,6 +179,7 @@ test('formatting applies to the selection, and undo reverses it', async ({ page 
   await button(page, 'Fill color').click();
   await page.getByRole('menuitem', { name: 'Yellow fill' }).click();
   await expect(cell(page, 'A1')).toHaveCSS('background-color', 'rgb(255, 241, 118)');
+  await expect(grid(page)).toBeFocused();
 
   await page.getByRole('combobox', { name: 'Number format' }).selectOption('Currency');
   await expect(cell(page, 'A1')).toHaveText('$1,234.50');

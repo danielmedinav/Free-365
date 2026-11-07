@@ -10,7 +10,16 @@
   "dependencies": {
     "@free360/commands": "workspace:*",
     "@free360/core": "workspace:*",
+    "@free360/storage": "workspace:*",
     "@free360/ui": "workspace:*",
-    "react": "^19.3.1"
+    "immer": "^11.2.9",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.2",
+    "konva": "^10.9.1",
+    "lucide-react": "^1.66.0",
+    "pptxgenjs": "^4.0.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-konva": "^19.3.2"
   }
 }

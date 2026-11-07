@@ -1,0 +1,50 @@
+.sorter {
+  flex: none;
+  width: 216px;
+  overflow-y: auto;
+  background: var(--fs-surface-2);
+  border-right: 1px solid var(--fs-border);
+}
+
+.list {
+  margin: 0;
+  padding: var(--fs-space-2);
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  gap: var(--fs-space-1);
+  margin-bottom: var(--fs-space-2);
+  border-top: 2px solid transparent;
+}
+
+.item[data-over='true'] {
+  border-top-color: var(--fs-app-accent);
+}
+
+.number {
+  width: 18px;
+  font-size: 12px;
+  text-align: right;
+  color: var(--fs-text-muted);
+}
+
+.thumb {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid var(--fs-border);
+  border-radius: var(--fs-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.thumb[aria-current='true'] {
+  border-color: var(--fs-app-accent);
+}
+
+/* The button handles clicks and drags; the drawing inside only shows. */
+.thumb > * {
+  pointer-events: none;
+}

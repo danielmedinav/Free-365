@@ -47,6 +47,11 @@ export function createGridCommands(actions: GridActions): Command[] {
   const inGrid = (run: () => void) => () => {
     run();
     focusGrid();
+    // Again once any menu that ran this has closed, as it holds on to focus until then. By then
+    // the keyboard may have moved on to something else, which keeps it.
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body) focusGrid();
+    });
   };
   const style = (patch: CellStyle) => inGrid(() => store.applyStyle(getRange(), patch));
 
